@@ -142,6 +142,15 @@ bool elfu_get_ehdr(const elfu_t* e, elfu_ehdr_t* ehdr);
 bool elfu_get_section(const elfu_t* e, size_t index, elfu_section_t* section);
 
 /*!
+ * This function retrieve a string from a string table section.
+ * @param e The \c elfu_t object.
+ * @param index The section index of the string table.
+ * @param str The string offset within the string table.
+ * @return A pointer to the string on success. \c nullptr on failure.
+ */
+const char* elfu_strptr(const elfu_t* e, size_t index, size_t str);
+
+/*!
  * Destroy an \c elfu_t object and unmap the object from memory.
  * @param e A pointer to an \c elfu_t object pointer to destroy. Set to \c nullptr after destruction.
  */

@@ -106,6 +106,7 @@ static bool elf_read_header(elfu_t* e) {
 }
 
 #include <stdio.h>
+
 elfu_t* elfu_new(const int fd) {
   elfu_t* elf = malloc(sizeof(elfu_t));
   if (!elf) {
@@ -179,6 +180,7 @@ bool elfu_get_section(const elfu_t* e, const size_t index, elfu_section_t* secti
   elfu_shdr_t hdr = {};
   if (e->class == CLASS32) {
     Elf32_Shdr h32 = *(Elf32_Shdr*)(e->raw + off);
+
     hdr.sh_name = translate(e, h32.sh_name);
     hdr.sh_type = translate(e, h32.sh_type);
     hdr.sh_flags = translate(e, h32.sh_flags);
@@ -218,6 +220,24 @@ bool elfu_get_section(const elfu_t* e, const size_t index, elfu_section_t* secti
   };
 
   return true;
+}
+
+const char* elfu_strptr(const elfu_t* e, size_t index, size_t str) {
+  elfu_section_t strtab;
+  if (!elfu_get_section(e, index, &strtab))
+    return nullptr;
+
+  const auto start = (uintptr_t)strtab.data;
+  const auto end = (uintptr_t)(strtab.data + str);
+
+  if (end < start)
+    return nullptr;
+
+  if (e->fsize < end - (uintptr_t)e->raw)
+    return nullptr;
+
+  // TODO: add null terminator check.
+  return (const char*)(strtab.data + str);
 }
 
 void elfu_destroy(elfu_t** e) {
