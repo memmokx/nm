@@ -1,0 +1,9 @@
+*.o
+*.a
+*.so
+ft_ssl
+.gdb_history
+*.txt
+
+/**/Output/
+.idea/
