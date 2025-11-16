@@ -3,6 +3,7 @@
 #include <unistd.h>
 
 #include <nm/elfu.h>
+#include <nm/nm.h>
 #include <stdlib.h>
 
 // TODO: add libadvanced
@@ -13,59 +14,6 @@ static void nm_memcpy(void* dst, const void* src, size_t n) {
   while (n--)
     *d++ = *s++;
 }
-
-typedef enum {
-  // "A" The symbol's value is absolute, and will not be changed by further linking.
-  SYM_ABSOLUTE = 'A',
-  // "B" "b" The symbol is in the BSS data section.
-  SYM_BSS_G = 'B',
-  SYM_BSS_L = 'b',
-  // "C" "c" The symbol is common.  Common symbols are uninitialized data.
-  SYM_COMMON_G = 'C',
-  SYM_COMMON_L = 'c',
-  // "D" "d" The symbol is in the initialized data section.
-  SYM_INITD_G = 'D',
-  SYM_INITD_L = 'd',
-  // "I" The symbol is an indirect reference to another symbol.
-  SYM_INDIR = 'I',
-  // "N" The symbol is a debugging symbol.
-  SYM_DEBUG = 'N',
-  // "n" The symbol is in a non-data, non-code, non-debug read-only section.
-  SYM_RD_ONLY = 'n',
-  // "p" The symbol is in a stack unwind section.
-  SYM_UNWIND = 'p',
-  // "R"
-  // "r" The symbol is in a read only data section.
-  SYM_RD_ONLY_DATA_G = 'R',
-  SYM_RD_ONLY_DATA_L = 'r',
-  // "S"
-  // "s" The symbol is in an uninitialized or zero-initialized data section for small objects.
-  SYM_UNINIT_DATA_G = 'S',
-  SYM_UNINIT_DATA_L = 's',
-  // "T"
-  // "t" The symbol is in the text (code) section.
-  SYM_CODE_G = 'T',
-  SYM_CODE_L = 't',
-  // "U" The symbol is undefined.
-  SYM_UNDEFINED = 'U',
-  // "u" The symbol is a unique global symbol.
-  SYM_UNIQUE_GLOBAL = 'u',
-  // "V" "v" The symbol is a weak object.
-  SYM_WEAK_OBJ_G = 'V',
-  SYM_WEAK_OBJ_L = 'v',
-  // "W" "w" The symbol is a weak symbol that has not been specifically tagged as a weak object symbol.
-  SYM_WEAK_G = 'W',
-  SYM_WEAK_L = 'w',
-  // ? The symbol type is unknown, or object file format specific.
-  SYM_UNKNOWN = '?',
-} nm_sym_type_t;
-
-typedef struct {
-  const char* name;
-  nm_sym_type_t type;
-  uint64_t value;
-  Elf64_Sym o;
-} nm_symbol_t;
 
 typedef struct {
   nm_symbol_t* ptr;
@@ -122,17 +70,42 @@ static bool nm_symbol_vector_push(nm_symbol_vector_t* vec, const nm_symbol_t sym
   return true;
 }
 
+static nm_sym_type_t nm_section_type(const elfu_t* obj, const size_t index) {
+  // Obviously not a valid section index
+  if (index != SHN_UNDEF && index >= SHN_LORESERVE)
+    return SYM_UNKNOWN;
+
+  elfu_section_t section;
+  if (!elfu_get_section(obj, index, &section))
+    return SYM_UNKNOWN;
+
+  const auto type = section.hdr.sh_type;
+  const auto flags = section.hdr.sh_flags;
+
+  if (type == SHT_PROGBITS) {
+    // .text section
+    if (flags & SHF_EXECINSTR)
+      return SYM_CODE_L;
+  }
+  // .bss section
+  if (type == SHT_NOBITS && (flags & SHF_WRITE && flags & SHF_ALLOC))
+    return SYM_BSS_L;
+  // data sections
+  if (flags & SHF_WRITE && flags & SHF_ALLOC)
+    return SYM_INITD_L;
+  if ((flags & SHF_WRITE) == 0)
+    return SYM_RD_ONLY_DATA_L;
+  return SYM_UNKNOWN;
+}
+
 #define shndx(s) ((s).st_shndx)
 
 static nm_sym_type_t nm_sym_type(const elfu_t* obj, const Elf64_Sym s) {
-  (void)obj;
   const auto type = ELF64_ST_TYPE(s.st_info);
   const auto bind = ELF64_ST_BIND(s.st_info);
 
   if (shndx(s) == SHN_COMMON)
     return SYM_COMMON_G;
-  if (shndx(s) == SHN_ABS)
-    return SYM_ABSOLUTE;
   if (shndx(s) == SHN_UNDEF) {
     if (bind == STB_WEAK)
       return (type == STT_OBJECT) ? SYM_WEAK_OBJ_L : SYM_WEAK_L;
@@ -143,15 +116,22 @@ static nm_sym_type_t nm_sym_type(const elfu_t* obj, const Elf64_Sym s) {
     return SYM_INDIR;
   if (bind == STB_GNU_UNIQUE)
     return SYM_UNIQUE_GLOBAL;
-  return SYM_UNKNOWN;
+  if (bind == STB_WEAK)
+    return (type == STT_OBJECT) ? SYM_WEAK_OBJ_G : SYM_WEAK_G;
+
+  const auto stype = (shndx(s) == SHN_ABS) ? SYM_ABSOLUTE_L : nm_section_type(obj, shndx(s));
+  if (stype != SYM_UNKNOWN && bind == STB_GLOBAL)
+    return stype - 32;
+
+  return stype;
 }
 
-static bool nm_keep_sym(const elfu_t* obj, const Elf64_Sym s) {
+static bool nm_keep_symbol(const elfu_t* obj, const Elf64_Sym s) {
   (void)obj;
 
   const auto type = ELF64_ST_TYPE(s.st_info);
   if (type == STT_FILE)
-    return false;
+    return true;
 
   return true;
 }
@@ -163,21 +143,24 @@ static bool nm_keep_sym(const elfu_t* obj, const Elf64_Sym s) {
  * @param symbols
  * @return The number of symbols found, or \c -1 on error.
  */
-static ssize_t nm_process_sym_tab(const elfu_t* obj,
-                                  const elfu_section_t* symtab,
-                                  nm_symbol_vector_t* symbols) {
+static ssize_t nm_process_symtab(const elfu_t* obj,
+                                 const elfu_section_t* symtab,
+                                 nm_symbol_vector_t* symbols) {
   const auto n = symtab->hdr.sh_size / symtab->hdr.sh_entsize;
   const auto table = (const Elf64_Sym*)symtab->data;
   const auto strtab = symtab->hdr.sh_link;
 
-  const char* name;
   for (size_t i = 1; i < n; i++) {
+    const char* name = nullptr;
     const auto sym = table[i];
 
-    if ((name = elfu_strptr(obj, strtab, sym.st_name)) == nullptr)
+    if (ELF64_ST_TYPE(sym.st_info) == STT_SECTION &&
+        (name = elfu_get_section_name(obj, sym.st_shndx)) == nullptr)
+      name = "<corrupt>";
+    if (!name && (name = elfu_strptr(obj, strtab, sym.st_name)) == nullptr)
       name = "<corrupt>";
 
-    if (!nm_keep_sym(obj, sym))
+    if (!nm_keep_symbol(obj, sym))
       continue;
 
     if (!nm_symbol_vector_push(symbols, (nm_symbol_t){name, nm_sym_type(obj, sym),
@@ -208,7 +191,7 @@ static void nm_list_symbols(const elfu_t* obj, bool* found) {
     return;
 
   elfu_section_t sym;
-  if (elfu_get_symtab(obj, &sym) && nm_process_sym_tab(obj, &sym, &symbols) < 0)
+  if (elfu_get_symtab(obj, &sym) && nm_process_symtab(obj, &sym, &symbols) < 0)
     goto err;
 
   if (symbols.len != 0)

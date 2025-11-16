@@ -252,6 +252,19 @@ bool elfu_get_section(const elfu_t* e, const size_t index, elfu_section_t* secti
   return true;
 }
 
+const char* elfu_get_section_name(const elfu_t* e, const size_t index) {
+  if (!e || !e->flags.ehdr) {
+    seterr(ELFU_INVALID_ARG);
+    return nullptr;
+  }
+
+  elfu_section_t tmp;
+  if (!elfu_get_section(e, index, &tmp))
+    return nullptr;
+
+  return elfu_strptr(e, e->ehdr.e_shstrndx, tmp.hdr.sh_name);
+}
+
 const char* elfu_strptr(const elfu_t* e, const size_t index, const size_t str) {
   elfu_section_t strtab;
   if (!elfu_get_section(e, index, &strtab))

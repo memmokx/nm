@@ -116,8 +116,8 @@ typedef struct _elfu_t {
 /*!
  * This function will allocate a new \c elfu_t object and map the passed object in memory.
  * @param fd The file descriptor of the ELF object.
- * @return A new \c elfu_t object on success. \c nullptr on failure, and sets the appropriate
- * error that can be retrieved with \c elfu_get_err.
+ * @return A new \c elfu_t object on success. \c nullptr on failure, and sets the
+ * appropriate error that can be retrieved with \c elfu_get_err.
  */
 elfu_t* elfu_new(int fd);
 
@@ -156,6 +156,14 @@ bool elfu_get_symtab(const elfu_t* e, elfu_section_t* symtab);
  * @return \c true if found, \c false otherwise. It will also return \c false on error.
  */
 bool elfu_get_dynsymtab(const elfu_t* e, elfu_section_t* dynsymtab);
+
+/*!
+ * Retrieve the name associated to the given section index.
+ * @param e The \c elfu_t object.
+ * @param index The section index.
+ * @return A pointer to the string on success. \c nullptr on failure.
+ */
+const char* elfu_get_section_name(const elfu_t* e, size_t index);
 
 /*!
  * This function retrieve a string from a string table section.
