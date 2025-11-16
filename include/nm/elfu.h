@@ -142,6 +142,22 @@ bool elfu_get_ehdr(const elfu_t* e, elfu_ehdr_t* ehdr);
 bool elfu_get_section(const elfu_t* e, size_t index, elfu_section_t* section);
 
 /*!
+ * Retrieve the first \c SHT_SYMTAB section in the object.
+ * @param e The \c elfu_t object.
+ * @param symtab[out] The \c elfu_section_t to fill once found.
+ * @return \c true if found, \c false otherwise. It will also return \c false on error.
+ */
+bool elfu_get_symtab(const elfu_t* e, elfu_section_t* symtab);
+
+/*!
+ * Retrieve the first \c SHT_DYNSYM section in the object.
+ * @param e The \c elfu_t object.
+ * @param dynsymtab[out] The \c elfu_section_t to fill once found.
+ * @return \c true if found, \c false otherwise. It will also return \c false on error.
+ */
+bool elfu_get_dynsymtab(const elfu_t* e, elfu_section_t* dynsymtab);
+
+/*!
  * This function retrieve a string from a string table section.
  * @param e The \c elfu_t object.
  * @param index The section index of the string table.
@@ -149,6 +165,16 @@ bool elfu_get_section(const elfu_t* e, size_t index, elfu_section_t* section);
  * @return A pointer to the string on success. \c nullptr on failure.
  */
 const char* elfu_strptr(const elfu_t* e, size_t index, size_t str);
+
+/*!
+ * @return Whether the library is in an error state or not.
+ */
+bool elfu_has_err();
+
+/*!
+ * @return The last error that occurred.
+ */
+elfu_err_t elfu_get_err();
 
 /*!
  * Destroy an \c elfu_t object and unmap the object from memory.

@@ -157,6 +157,36 @@ bool elfu_get_ehdr(const elfu_t* e, elfu_ehdr_t* ehdr) {
   return true;
 }
 
+static bool _elfu_first_section_by_type(const elfu_t* e,
+                                        const uint64_t type,
+                                        elfu_section_t* section) {
+  if (!e || !e->flags.ehdr || !section) {
+    seterr(ELFU_INVALID_ARG);
+    return false;
+  }
+
+  for (size_t i = 0; i < e->ehdr.e_shnum; i++) {
+    elfu_section_t tmp;
+    if (!elfu_get_section(e, i, &tmp))
+      return false;
+
+    if (tmp.hdr.sh_type == type) {
+      *section = tmp;
+      return true;
+    }
+  }
+
+  return false;
+}
+
+bool elfu_get_symtab(const elfu_t* e, elfu_section_t* symtab) {
+  return _elfu_first_section_by_type(e, SHT_SYMTAB, symtab);
+}
+
+bool elfu_get_dynsymtab(const elfu_t* e, elfu_section_t* dynsymtab) {
+  return _elfu_first_section_by_type(e, SHT_DYNSYM, dynsymtab);
+}
+
 bool elfu_get_section(const elfu_t* e, const size_t index, elfu_section_t* section) {
   if (!e || !section || !e->flags.ehdr) {
     seterr(ELFU_INVALID_ARG);
@@ -248,4 +278,12 @@ void elfu_destroy(elfu_t** e) {
     munmap((*e)->raw, (*e)->fsize);
   free(*e);
   *e = nullptr;
+}
+
+bool elfu_has_err() {
+  return g_err != ELFU_SUCCESS;
+}
+
+elfu_err_t elfu_get_err() {
+  return g_err;
 }

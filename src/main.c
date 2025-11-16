@@ -14,8 +14,55 @@ static void nm_memcpy(void* dst, const void* src, size_t n) {
     *d++ = *s++;
 }
 
+typedef enum {
+  // "A" The symbol's value is absolute, and will not be changed by further linking.
+  SYM_ABSOLUTE = 'A',
+  // "B" "b" The symbol is in the BSS data section.
+  SYM_BSS_G = 'B',
+  SYM_BSS_L = 'b',
+  // "C" "c" The symbol is common.  Common symbols are uninitialized data.
+  SYM_COMMON_G = 'C',
+  SYM_COMMON_L = 'c',
+  // "D" "d" The symbol is in the initialized data section.
+  SYM_INITD_G = 'D',
+  SYM_INITD_L = 'd',
+  // "I" The symbol is an indirect reference to another symbol.
+  SYM_INDIR = 'I',
+  // "N" The symbol is a debugging symbol.
+  SYM_DEBUG = 'N',
+  // "n" The symbol is in a non-data, non-code, non-debug read-only section.
+  SYM_RD_ONLY = 'n',
+  // "p" The symbol is in a stack unwind section.
+  SYM_UNWIND = 'p',
+  // "R"
+  // "r" The symbol is in a read only data section.
+  SYM_RD_ONLY_DATA_G = 'R',
+  SYM_RD_ONLY_DATA_L = 'r',
+  // "S"
+  // "s" The symbol is in an uninitialized or zero-initialized data section for small objects.
+  SYM_UNINIT_DATA_G = 'S',
+  SYM_UNINIT_DATA_L = 's',
+  // "T"
+  // "t" The symbol is in the text (code) section.
+  SYM_CODE_G = 'T',
+  SYM_CODE_L = 't',
+  // "U" The symbol is undefined.
+  SYM_UNDEFINED = 'U',
+  // "u" The symbol is a unique global symbol.
+  SYM_UNIQUE_GLOBAL = 'g',
+  // "V" "v" The symbol is a weak object.
+  SYM_WEAK_OBJ_G = 'V',
+  SYM_WEAK_OBJ_L = 'v',
+  // "W" "w" The symbol is a weak symbol that has not been specifically tagged as a weak object symbol.
+  SYM_WEAK_G = 'W',
+  SYM_WEAK_L = 'w',
+  // ? The symbol type is unknown, or object file format specific.
+  SYM_UNKNOWN = '?',
+} nm_sym_type_t;
+
 typedef struct {
   const char* name;
+
   Elf64_Sym sym;  // temporary
 } nm_symbol_t;
 
@@ -93,7 +140,7 @@ static ssize_t nm_process_sym_tab(const elfu_t* obj,
   const auto strtab = symtab->hdr.sh_link;
 
   const char* name;
-  for (size_t i = 0; i < n; i++) {
+  for (size_t i = 1; i < n; i++) {
     const auto sym = table[i];
 
     if ((name = elfu_strptr(obj, strtab, sym.st_name)) == nullptr)
@@ -108,34 +155,33 @@ static ssize_t nm_process_sym_tab(const elfu_t* obj,
 
 #include <stdio.h>
 
-static void nm_list_symbols(const elfu_t* obj, const elfu_ehdr_t* hdr, bool* found) {
+static __attribute_maybe_unused__ void nm_display_symbols(nm_symbol_vector_t* symbols) {
+  for (size_t i = 0; i < symbols->len; i++) {
+    printf("%s: %u\n", symbols->ptr[i].name, symbols->ptr[i].sym.st_name);
+  }
+}
+
+static void nm_list_symbols(const elfu_t* obj, bool* found) {
   nm_symbol_vector_t symbols = {};
   if (!nm_symbol_vector_new(&symbols))
     return;
 
-  for (size_t i = 0; i < hdr->e_shnum; i++) {
-    elfu_section_t section;
-    if (!elfu_get_section(obj, i, &section))
-      goto err;
-
-    if (section.hdr.sh_type != SHT_SYMTAB)
-      continue;
-
-    if (nm_process_sym_tab(obj, &section, &symbols) < 0)
-      goto err;
-  }
+  elfu_section_t sym;
+  if (elfu_get_symtab(obj, &sym) && nm_process_sym_tab(obj, &sym, &symbols) < 0)
+    goto err;
 
   if (symbols.len != 0)
     *found = true;
 
-  for (size_t i = 0; i < symbols.len; i++)
-    printf("symbol: '%s'\n", symbols.ptr[i].name);
+  nm_display_symbols(&symbols);
 
 err:
+  *found = false;
   nm_symbol_vector_destroy(&symbols);
 }
 
-void nm_process_file(const char* name) {
+int nm_process_file(const char* name) {
+  int exit_code = EXIT_SUCCESS;
   elfu_t* obj = nullptr;
 
   const int fd = open(name, O_RDONLY);
@@ -145,25 +191,37 @@ void nm_process_file(const char* name) {
   if ((obj = elfu_new(fd)) == nullptr)
     goto err;
 
-  elfu_ehdr_t ehdr;
-  if (!elfu_get_ehdr(obj, &ehdr))
-    goto err;
-
   bool found = false;
-  nm_list_symbols(obj, &ehdr, &found);
+  nm_list_symbols(obj, &found);
   // TODO: no symbols found
 
+  goto done;
+
 err:
+  exit_code = EXIT_FAILURE;
+done:
   if (fd != -1)
     close(fd);
   if (obj)
     elfu_destroy(&obj);
+  return exit_code;
 }
 
+#define NM_DEFAULT_PROGRAM "a.out"
+
 int main(const int argc, char** argv) {
+  if (argc == 1)
+    return nm_process_file(NM_DEFAULT_PROGRAM);
+  if (argc == 2)
+    return nm_process_file(argv[1]);
+
+  int exit_code = EXIT_SUCCESS;
   if (argc > 1) {
     for (int i = 1; i < argc; i++) {
-      nm_process_file(argv[i]);
+      printf("\n%s:\n", argv[i]);
+      exit_code += nm_process_file(argv[i]);
     }
   }
+
+  return exit_code;
 }
