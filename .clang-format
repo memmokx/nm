@@ -1,4 +1,4 @@
 BasedOnStyle: Chromium
-ColumnLimit: 85
+ColumnLimit: 90
 PenaltyBreakOpenParenthesis: 60
 PenaltyExcessCharacter: 5

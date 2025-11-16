@@ -252,7 +252,7 @@ bool elfu_get_section(const elfu_t* e, const size_t index, elfu_section_t* secti
   return true;
 }
 
-const char* elfu_strptr(const elfu_t* e, size_t index, size_t str) {
+const char* elfu_strptr(const elfu_t* e, const size_t index, const size_t str) {
   elfu_section_t strtab;
   if (!elfu_get_section(e, index, &strtab))
     return nullptr;
@@ -266,7 +266,9 @@ const char* elfu_strptr(const elfu_t* e, size_t index, size_t str) {
   if (e->fsize < end - (uintptr_t)e->raw)
     return nullptr;
 
-  // TODO: add null terminator check.
+  if (*(strtab.data + strtab.hdr.sh_size) != 0)
+    return nullptr;
+
   return (const char*)(strtab.data + str);
 }
 

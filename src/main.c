@@ -1,5 +1,5 @@
 #include <fcntl.h>
-#include <sys/mman.h>
+#include <stdio.h>
 #include <unistd.h>
 
 #include <nm/elfu.h>
@@ -49,7 +49,7 @@ typedef enum {
   // "U" The symbol is undefined.
   SYM_UNDEFINED = 'U',
   // "u" The symbol is a unique global symbol.
-  SYM_UNIQUE_GLOBAL = 'g',
+  SYM_UNIQUE_GLOBAL = 'u',
   // "V" "v" The symbol is a weak object.
   SYM_WEAK_OBJ_G = 'V',
   SYM_WEAK_OBJ_L = 'v',
@@ -62,8 +62,9 @@ typedef enum {
 
 typedef struct {
   const char* name;
-
-  Elf64_Sym sym;  // temporary
+  nm_sym_type_t type;
+  uint64_t value;
+  Elf64_Sym o;
 } nm_symbol_t;
 
 typedef struct {
@@ -121,8 +122,38 @@ static bool nm_symbol_vector_push(nm_symbol_vector_t* vec, const nm_symbol_t sym
   return true;
 }
 
-static __attribute_maybe_unused__ void nm_symbol_vector_clear(nm_symbol_vector_t* vec) {
-  vec->len = 0;
+#define shndx(s) ((s).st_shndx)
+
+static nm_sym_type_t nm_sym_type(const elfu_t* obj, const Elf64_Sym s) {
+  (void)obj;
+  const auto type = ELF64_ST_TYPE(s.st_info);
+  const auto bind = ELF64_ST_BIND(s.st_info);
+
+  if (shndx(s) == SHN_COMMON)
+    return SYM_COMMON_G;
+  if (shndx(s) == SHN_ABS)
+    return SYM_ABSOLUTE;
+  if (shndx(s) == SHN_UNDEF) {
+    if (bind == STB_WEAK)
+      return (type == STT_OBJECT) ? SYM_WEAK_OBJ_L : SYM_WEAK_L;
+    return SYM_UNDEFINED;
+  }
+
+  if (type == STT_GNU_IFUNC)
+    return SYM_INDIR;
+  if (bind == STB_GNU_UNIQUE)
+    return SYM_UNIQUE_GLOBAL;
+  return SYM_UNKNOWN;
+}
+
+static bool nm_keep_sym(const elfu_t* obj, const Elf64_Sym s) {
+  (void)obj;
+
+  const auto type = ELF64_ST_TYPE(s.st_info);
+  if (type == STT_FILE)
+    return false;
+
+  return true;
 }
 
 /*!
@@ -144,21 +175,31 @@ static ssize_t nm_process_sym_tab(const elfu_t* obj,
     const auto sym = table[i];
 
     if ((name = elfu_strptr(obj, strtab, sym.st_name)) == nullptr)
-      return -1;
+      name = "<corrupt>";
 
-    if (!nm_symbol_vector_push(symbols, (nm_symbol_t){name, sym}))
+    if (!nm_keep_sym(obj, sym))
+      continue;
+
+    if (!nm_symbol_vector_push(symbols, (nm_symbol_t){name, nm_sym_type(obj, sym),
+                                                      sym.st_value, sym}))
       return -1;
   }
 
   return (ssize_t)n;
 }
 
-#include <stdio.h>
+static void nm_display_sym(const nm_symbol_t* s) {
+  if (s->o.st_shndx != SHN_UNDEF) {
+    printf("%016lx", s->value);
+  } else
+    printf("                ");
+  printf(" %c ", (char)s->type);
+  printf("%s\n", s->name);
+}
 
-static __attribute_maybe_unused__ void nm_display_symbols(nm_symbol_vector_t* symbols) {
-  for (size_t i = 0; i < symbols->len; i++) {
-    printf("%s: %u\n", symbols->ptr[i].name, symbols->ptr[i].sym.st_name);
-  }
+static __attribute_maybe_unused__ void nm_display_symbols(const nm_symbol_vector_t* symbols) {
+  for (size_t i = 0; i < symbols->len; i++)
+    nm_display_sym(&symbols->ptr[i]);
 }
 
 static void nm_list_symbols(const elfu_t* obj, bool* found) {
