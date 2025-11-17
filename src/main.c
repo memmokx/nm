@@ -130,8 +130,11 @@ static bool nm_keep_symbol(const elfu_t* obj, const Elf64_Sym s) {
   (void)obj;
 
   const auto type = ELF64_ST_TYPE(s.st_info);
-  if (type == STT_FILE)
-    return true;
+  // I'm pretty sure those are only used for debugging ? And nm filters debugging symbols by
+  // default.
+  // TODO: if -a flag this should be changed
+  if (type == STT_FILE || type == STT_SECTION)
+    return false;
 
   return true;
 }
