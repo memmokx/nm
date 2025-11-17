@@ -9,7 +9,18 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <nm/opt.h>
+
 static const char* g_filename = nullptr;
+
+static bool flag_no_sort = false;
+static bool flag_reverse_sort = false;
+static bool flag_only_undefined = false;
+static bool flag_only_external = false;
+static bool flag_dynamic = false;
+static bool flag_no_filter = false;
+
+static auto symtab_fetch = elfu_get_symtab;
 
 // too lazy to pull libft ...
 
@@ -169,18 +180,20 @@ static int nm_cmp_symbol(const nm_symbol_t* a, const nm_symbol_t* b) {
 }
 
 static bool nm_list_symbols(const elfu_t* obj) {
+  bool ret = false;
   nm_symbol_vector_t symbols = {};
   if (!nm_symbol_vector_new(&symbols))
     return false;
 
-  bool ret = false;
   elfu_section_t sym;
-  if (elfu_get_symtab(obj, &sym) && nm_process_symtab(obj, &sym, &symbols) < 0)
+  if (symtab_fetch(obj, &sym) && nm_process_symtab(obj, &sym, &symbols) < 0)
     goto err;
 
   if (symbols.len != 0)
     ret = true;
-  heapsort(symbols.ptr, symbols.len, nm_cmp_symbol);
+
+  if (!flag_no_sort)
+    heapsort(symbols.ptr, symbols.len, nm_cmp_symbol);
 
   const bool bits_64 = obj->class == CLASS64;
   for (size_t i = 0; i < symbols.len; i++)
@@ -228,15 +241,48 @@ done:
 
 #define NM_DEFAULT_PROGRAM "a.out"
 
-int main(const int argc, char** argv) {
-  if (argc == 1)
+int main(int argc, char** argv) {
+  opt_t opt = nm_opt("prugDa");
+
+  int flag;
+  while ((flag = opt_next(&opt, argc, argv)) != OPT_END) {
+    switch (flag) {
+      case 'a':
+        flag_no_filter = true;
+        break;
+      case 'D':
+        flag_dynamic = true;
+        symtab_fetch = elfu_get_dynsymtab;
+        break;
+      case 'g':
+        flag_only_external = true;
+        break;
+      case 'u':
+        flag_only_undefined = true;
+        break;
+      case 'r':
+        flag_reverse_sort = true;
+        break;
+      case 'p':
+        flag_no_sort = true;
+        break;
+      default:
+        // TODO: print usage
+        break;
+    }
+  }
+
+  argc -= opt.argc;
+  argv += opt.argc;
+
+  if (argc == 0)
     return nm_process_file(NM_DEFAULT_PROGRAM);
-  if (argc == 2)
-    return nm_process_file(argv[1]);
+  if (argc == 1)
+    return nm_process_file(argv[0]);
 
   int exit_code = EXIT_SUCCESS;
   if (argc > 1) {
-    for (int i = 1; i < argc; i++) {
+    for (int i = 0; i < argc; i++) {
       nm_putstr("\n");
       nm_putstr(argv[i]);
       nm_putstr(":\n");

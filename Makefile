@@ -5,7 +5,7 @@ CFLAGS = -std=c23 -Wall -Wextra -Werror -Wno-unknown-warning-option -Wno-error=o
 
 INCLUDE = -Iinclude 
 
-MAIN_SRC = src/main.c src/elfu.c src/common.c src/sort.c
+MAIN_SRC = src/main.c src/elfu.c src/common.c src/sort.c src/vec.c src/opt.c
 
 SRC = $(MAIN_SRC)
 OBJ = $(SRC:.c=.o)
@@ -22,7 +22,7 @@ ifdef OPT
 endif
 
 ifdef DEBUG
-	CFLAGS += -g
+	CFLAGS += -g2
 endif
 
 ifdef SANITIZE
