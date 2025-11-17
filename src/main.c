@@ -167,22 +167,39 @@ static ssize_t nm_process_symtab(const elfu_t* obj,
   return (ssize_t)n;
 }
 
-static void nm_display_symbol(const nm_symbol_t* s) {
+static void nm_symbol_put_value(const nm_symbol_t* s, const bool bits_64) {
+  const size_t width = (bits_64) ? 16 : 8;
+
+  char buffer[32] = {};
+  auto value = s->value;
+
   if (s->o.st_shndx != SHN_UNDEF) {
-    printf("%016lx", s->value);
-  } else
-    printf("                ");
-  printf(" %c ", (char)s->type);
-  printf("%s\n", s->name);
+    char* h = buffer + width;
+
+    while (value > 0 && h != buffer) {
+      const auto table = "0123456789abcdef";
+      *--h = table[value % 16];
+      value /= 16;
+    }
+    while (h != buffer)
+      *--h = '0';
+  } else {
+    for (size_t i = 0; i < width; i++)
+      buffer[i] = ' ';
+  }
+
+  nm_putstr(buffer);
+}
+
+static void nm_display_symbol(const nm_symbol_t* s, const bool bits_64) {
+  nm_symbol_put_value(s, bits_64);
+  nm_putstr((char[]){' ', (char)s->type, ' ', 0});
+  nm_putstr(s->name);
+  nm_putstr("\n");
 }
 
 static int nm_cmp_symbol(const nm_symbol_t* a, const nm_symbol_t* b) {
   return nm_strcmp(a->name, b->name);
-}
-
-static __attribute_maybe_unused__ void nm_display_symbols(const nm_symbol_vector_t* symbols) {
-  for (size_t i = 0; i < symbols->len; i++)
-    nm_display_symbol(&symbols->ptr[i]);
 }
 
 static void nm_list_symbols(const elfu_t* obj, bool* found) {
@@ -199,7 +216,9 @@ static void nm_list_symbols(const elfu_t* obj, bool* found) {
 
   heapsort(symbols.ptr, symbols.len, nm_cmp_symbol);
 
-  nm_display_symbols(&symbols);
+  const bool bits_64 = obj->class == CLASS64;
+  for (size_t i = 0; i < symbols.len; i++)
+    nm_display_symbol(&symbols.ptr[i], bits_64);
 
 err:
   *found = false;

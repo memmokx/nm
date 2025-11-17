@@ -3,6 +3,7 @@
 
 #include <stddef.h>
 
+void nm_putstr(const char* str);
 int nm_strcmp(const char* a, const char* b);
 void nm_memcpy(void* dst, const void* src, size_t n);
 
