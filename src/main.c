@@ -1,5 +1,5 @@
+#include <errno.h>
 #include <fcntl.h>
-#include <locale.h>
 #include <stdio.h>
 #include <unistd.h>
 
@@ -7,61 +7,30 @@
 #include <nm/elfu.h>
 #include <nm/nm.h>
 #include <stdlib.h>
+#include <string.h>
 
-typedef struct {
-  nm_symbol_t* ptr;
-  size_t len;
-  size_t cap;
-} nm_symbol_vector_t;
+static const char* g_filename = nullptr;
 
-static bool nm_symbol_vector_new(nm_symbol_vector_t* vec) {
-  constexpr size_t initial = 4;
+// too lazy to pull libft ...
 
-  vec->ptr = malloc(initial * sizeof(nm_symbol_t));
-  if (!vec->ptr)
-    return false;
+#define nm_err(err)                          \
+  do {                                       \
+    nm_putstr_fd(STDERR_FILENO, "nm: ");     \
+    nm_putstr_fd(STDERR_FILENO, g_filename); \
+    nm_putstr_fd(STDERR_FILENO, ": ");       \
+    nm_putstr_fd(STDERR_FILENO, (err));      \
+    nm_putstr_fd(STDERR_FILENO, "\n");       \
+  } while (false)
 
-  vec->len = 0;
-  vec->cap = initial;
-  return true;
-}
-
-static void nm_symbol_vector_destroy(nm_symbol_vector_t* vec) {
-  if (vec->ptr) {
-    free(vec->ptr);
-    vec->ptr = nullptr;
-  }
-
-  vec->len = 0;
-  vec->cap = 0;
-}
-
-static bool nm_symbol_vector_grow(nm_symbol_vector_t* vec, const size_t min) {
-  size_t new = vec->cap;
-  while (new <= min)
-    new += new / 2 + 8;
-
-  void* old = vec->ptr;
-  vec->ptr = malloc(new * sizeof(nm_symbol_t));
-  if (!vec->ptr) {
-    free(old);
-    return false;
-  }
-
-  vec->cap = new;
-  nm_memcpy(vec->ptr, old, vec->len * sizeof(nm_symbol_t));
-  free(old);
-
-  return true;
-}
-
-static bool nm_symbol_vector_push(nm_symbol_vector_t* vec, const nm_symbol_t sym) {
-  if (vec->len >= vec->cap && !nm_symbol_vector_grow(vec, vec->len + 1))
-    return false;
-
-  vec->ptr[vec->len++] = sym;
-  return true;
-}
+#define nm_warn(err)                         \
+  do {                                       \
+    nm_putstr_fd(STDERR_FILENO, "nm: ");     \
+    nm_putstr_fd(STDERR_FILENO, "'");        \
+    nm_putstr_fd(STDERR_FILENO, g_filename); \
+    nm_putstr_fd(STDERR_FILENO, "': ");      \
+    nm_putstr_fd(STDERR_FILENO, (err));      \
+    nm_putstr_fd(STDERR_FILENO, "\n");       \
+  } while (false)
 
 static nm_sym_type_t nm_section_type(const elfu_t* obj, const size_t index) {
   // Obviously not a valid section index
@@ -134,9 +103,6 @@ static bool nm_keep_symbol(const elfu_t* obj, const Elf64_Sym s) {
 
 /*!
  * Process the given \a symtab ELF section and push its listed symbols to \a symbols.
- * @param obj
- * @param symtab
- * @param symbols
  * @return The number of symbols found, or \c -1 on error.
  */
 static ssize_t nm_process_symtab(const elfu_t* obj,
@@ -202,18 +168,18 @@ static int nm_cmp_symbol(const nm_symbol_t* a, const nm_symbol_t* b) {
   return nm_strcmp(a->name, b->name);
 }
 
-static void nm_list_symbols(const elfu_t* obj, bool* found) {
+static bool nm_list_symbols(const elfu_t* obj) {
   nm_symbol_vector_t symbols = {};
   if (!nm_symbol_vector_new(&symbols))
-    return;
+    return false;
 
+  bool ret = false;
   elfu_section_t sym;
   if (elfu_get_symtab(obj, &sym) && nm_process_symtab(obj, &sym, &symbols) < 0)
     goto err;
 
   if (symbols.len != 0)
-    *found = true;
-
+    ret = true;
   heapsort(symbols.ptr, symbols.len, nm_cmp_symbol);
 
   const bool bits_64 = obj->class == CLASS64;
@@ -221,24 +187,32 @@ static void nm_list_symbols(const elfu_t* obj, bool* found) {
     nm_display_symbol(&symbols.ptr[i], bits_64);
 
 err:
-  *found = false;
   nm_symbol_vector_destroy(&symbols);
+  return ret;
 }
 
 int nm_process_file(const char* name) {
   int exit_code = EXIT_SUCCESS;
   elfu_t* obj = nullptr;
 
+  g_filename = name;
+
   const int fd = open(name, O_RDONLY);
-  if (fd < 0)
+  if (fd < 0) {
+    nm_warn(strerror(errno));
     goto err;
+  }
 
-  if ((obj = elfu_new(fd)) == nullptr)
+  if ((obj = elfu_new(fd)) == nullptr) {
+    if (elfu_get_err() == ELFU_UNKNOWN_FORMAT)
+      nm_err("file format not recognized");
+    else if (elfu_get_err() == ELFU_SYS_ERR)
+      nm_warn(strerror(errno));
     goto err;
+  }
 
-  bool found = false;
-  nm_list_symbols(obj, &found);
-  // TODO: no symbols found
+  if (!nm_list_symbols(obj))
+    nm_err("no symbols");
 
   goto done;
 
@@ -255,10 +229,6 @@ done:
 #define NM_DEFAULT_PROGRAM "a.out"
 
 int main(const int argc, char** argv) {
-  setlocale(LC_MESSAGES, "");
-  setlocale(LC_CTYPE, "");
-  setlocale(LC_COLLATE, "");
-
   if (argc == 1)
     return nm_process_file(NM_DEFAULT_PROGRAM);
   if (argc == 2)
@@ -267,7 +237,9 @@ int main(const int argc, char** argv) {
   int exit_code = EXIT_SUCCESS;
   if (argc > 1) {
     for (int i = 1; i < argc; i++) {
-      printf("\n%s:\n", argv[i]);
+      nm_putstr("\n");
+      nm_putstr(argv[i]);
+      nm_putstr(":\n");
       exit_code += nm_process_file(argv[i]);
     }
   }

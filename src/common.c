@@ -2,12 +2,16 @@
 #include <nm/elfu.h>
 #include <unistd.h>
 
-void nm_putstr(const char* str) {
+void nm_putstr_fd(const int fd, const char* str) {
   size_t i = 0;
   while (str[i])
     i++;
 
-  write(STDOUT_FILENO, str, i);
+  write(fd, str, i);
+}
+
+void nm_putstr(const char* str) {
+  nm_putstr_fd(STDOUT_FILENO, str);
 }
 
 void nm_memcpy(void* dst, const void* src, size_t n) {
