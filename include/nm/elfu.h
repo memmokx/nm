@@ -23,6 +23,7 @@ typedef enum {
   ELFU_OUT_OF_MEMORY,
   ELFU_INVALID_ARG,
   ELFU_MALFORMED,
+  ELFU_UNKNOWN_FORMAT,
 } elfu_err_t;
 
 typedef enum {

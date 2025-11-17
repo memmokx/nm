@@ -5,7 +5,7 @@ CFLAGS = -std=c23 -Wall -Wextra -Werror -Wno-unknown-warning-option -Wno-error=o
 
 INCLUDE = -Iinclude 
 
-MAIN_SRC = src/main.c src/elfu.c
+MAIN_SRC = src/main.c src/elfu.c src/common.c src/sort.c
 
 SRC = $(MAIN_SRC)
 OBJ = $(SRC:.c=.o)

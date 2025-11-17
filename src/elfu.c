@@ -37,13 +37,13 @@ static elfu_endian_t fetch_host_endian() {
 
 static bool elf_read_ident(elfu_t* e) {
   if (e->fsize < sizeof(elf_ident_t)) {
-    seterr(ELFU_MALFORMED);
+    seterr(ELFU_UNKNOWN_FORMAT);
     return false;
   }
 
   const auto id = (elf_ident_t*)e->raw;
   if (*(u32*)id->magic != *(u32*)elf_magic) {
-    seterr(ELFU_MALFORMED);
+    seterr(ELFU_UNKNOWN_FORMAT);
     return false;
   }
 

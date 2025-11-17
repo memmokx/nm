@@ -1,19 +1,12 @@
 #include <fcntl.h>
+#include <locale.h>
 #include <stdio.h>
 #include <unistd.h>
 
+#include <nm/common.h>
 #include <nm/elfu.h>
 #include <nm/nm.h>
 #include <stdlib.h>
-
-// TODO: add libadvanced
-static void nm_memcpy(void* dst, const void* src, size_t n) {
-  const u8* s = src;
-  u8* d = dst;
-
-  while (n--)
-    *d++ = *s++;
-}
 
 typedef struct {
   nm_symbol_t* ptr;
@@ -130,8 +123,8 @@ static bool nm_keep_symbol(const elfu_t* obj, const Elf64_Sym s) {
   (void)obj;
 
   const auto type = ELF64_ST_TYPE(s.st_info);
-  // I'm pretty sure those are only used for debugging ? And nm filters debugging symbols by
-  // default.
+  // I'm pretty sure those are only used for debugging ? And nm filters debugging symbols
+  // by default.
   // TODO: if -a flag this should be changed
   if (type == STT_FILE || type == STT_SECTION)
     return false;
@@ -174,7 +167,7 @@ static ssize_t nm_process_symtab(const elfu_t* obj,
   return (ssize_t)n;
 }
 
-static void nm_display_sym(const nm_symbol_t* s) {
+static void nm_display_symbol(const nm_symbol_t* s) {
   if (s->o.st_shndx != SHN_UNDEF) {
     printf("%016lx", s->value);
   } else
@@ -183,9 +176,13 @@ static void nm_display_sym(const nm_symbol_t* s) {
   printf("%s\n", s->name);
 }
 
+static int nm_cmp_symbol(const nm_symbol_t* a, const nm_symbol_t* b) {
+  return nm_strcmp(a->name, b->name);
+}
+
 static __attribute_maybe_unused__ void nm_display_symbols(const nm_symbol_vector_t* symbols) {
   for (size_t i = 0; i < symbols->len; i++)
-    nm_display_sym(&symbols->ptr[i]);
+    nm_display_symbol(&symbols->ptr[i]);
 }
 
 static void nm_list_symbols(const elfu_t* obj, bool* found) {
@@ -199,6 +196,8 @@ static void nm_list_symbols(const elfu_t* obj, bool* found) {
 
   if (symbols.len != 0)
     *found = true;
+
+  heapsort(symbols.ptr, symbols.len, nm_cmp_symbol);
 
   nm_display_symbols(&symbols);
 
@@ -237,6 +236,10 @@ done:
 #define NM_DEFAULT_PROGRAM "a.out"
 
 int main(const int argc, char** argv) {
+  setlocale(LC_MESSAGES, "");
+  setlocale(LC_CTYPE, "");
+  setlocale(LC_COLLATE, "");
+
   if (argc == 1)
     return nm_process_file(NM_DEFAULT_PROGRAM);
   if (argc == 2)
