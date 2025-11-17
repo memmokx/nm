@@ -103,8 +103,11 @@ static bool nm_keep_symbol(const elfu_t* obj, const Elf64_Sym s) {
   (void)obj;
 
   const auto type = ELF64_ST_TYPE(s.st_info);
+  const auto bind = ELF64_ST_BIND(s.st_info);
   if (flag_only_undefined)
     return (s.st_shndx == SHN_UNDEF);
+  if (flag_only_external)
+    return (bind == STB_GLOBAL || bind == STB_WEAK);
   // I'm pretty sure those are only used for debugging ? And nm filters debugging symbols
   // by default.
   // TODO: if -a flag this should be changed
