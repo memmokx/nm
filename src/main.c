@@ -176,6 +176,8 @@ static void nm_display_symbol(const nm_symbol_t* s, const bool bits_64) {
 }
 
 static int nm_cmp_symbol(const nm_symbol_t* a, const nm_symbol_t* b) {
+  if (flag_reverse_sort)
+    return -nm_strcmp(a->name, b->name);
   return nm_strcmp(a->name, b->name);
 }
 
