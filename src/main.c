@@ -110,7 +110,7 @@ static bool nm_keep_symbol(const elfu_t* obj, const Elf64_Sym s) {
     return (bind == STB_GLOBAL || bind == STB_WEAK);
   if (flag_no_filter)
     return true;
-  
+
   // I'm pretty sure those are only used for debugging ? And nm filters debugging symbols
   // by default.
   if (type == STT_FILE || type == STT_SECTION)
@@ -121,34 +121,33 @@ static bool nm_keep_symbol(const elfu_t* obj, const Elf64_Sym s) {
 
 /*!
  * Process the given \a symtab ELF section and push its listed symbols to \a symbols.
- * @return The number of symbols found, or \c -1 on error.
+ * @return \c -1 on error.
  */
 static ssize_t nm_process_symtab(const elfu_t* obj,
                                  const elfu_section_t* symtab,
                                  nm_symbol_vector_t* symbols) {
-  const auto n = symtab->hdr.sh_size / symtab->hdr.sh_entsize;
-  const auto table = (const Elf64_Sym*)symtab->data;
-  const auto strtab = symtab->hdr.sh_link;
+  elfu_sym_iter_t iter;
+  if (!elfu_get_sym_iter(obj, symtab, &iter))
+    return -1;
 
-  for (size_t i = 1; i < n; i++) {
-    const char* name = nullptr;
-    const auto sym = table[i];
-
-    if (ELF64_ST_TYPE(sym.st_info) == STT_SECTION &&
-        (name = elfu_get_section_name(obj, sym.st_shndx)) == nullptr)
-      name = "<corrupt>";
-    if (!name && (name = elfu_strptr(obj, strtab, sym.st_name)) == nullptr)
-      name = "<corrupt>";
-
-    if (!nm_keep_symbol(obj, sym))
+  elfu_sym_t s;
+  while (elfu_sym_iter_next(&iter, &s)) {
+    if (!nm_keep_symbol(obj, s.sym))
       continue;
 
-    if (!nm_symbol_vector_push(symbols, (nm_symbol_t){name, nm_sym_type(obj, sym),
-                                                      sym.st_value, sym}))
+    const nm_symbol_t symbol = {
+        .name = s.name,
+        .version = s.version,
+        .type = nm_sym_type(obj, s.sym),
+        .value = s.sym.st_value,
+        .o = s.sym,
+    };
+
+    if (!nm_symbol_vector_push(symbols, symbol))
       return -1;
   }
 
-  return (ssize_t)n;
+  return (ssize_t)iter.total;
 }
 
 static void nm_symbol_put_value(const nm_symbol_t* s, const bool bits_64) {

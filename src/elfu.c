@@ -24,6 +24,104 @@ static constexpr u8 elf_magic[] = {0x7f, 'E', 'L', 'F'};
            u32: __builtin_bswap32,             \
            u64: __builtin_bswap64)((v)))
 
+static elfu_ehdr_t _elfu_read_ehdr(const elfu_t* e, const uintptr_t offset) {
+  elfu_ehdr_t ehdr = {};
+
+  if (e->class == CLASS32) {
+    _elfu32_ehdr_t e32 = *(_elfu32_ehdr_t*)(e->raw + offset);
+
+    ehdr.e_type = translate(e, e32.e_type);
+    ehdr.e_machine = translate(e, e32.e_machine);
+    ehdr.e_version = translate(e, e32.e_version);
+    ehdr.e_entry = translate(e, e32.e_entry);
+    ehdr.e_phoff = translate(e, e32.e_phoff);
+    ehdr.e_shoff = translate(e, e32.e_shoff);
+    ehdr.e_flags = translate(e, e32.e_flags);
+    ehdr.e_ehsize = translate(e, e32.e_ehsize);
+    ehdr.e_phentsize = translate(e, e32.e_phentsize);
+    ehdr.e_phnum = translate(e, e32.e_phnum);
+    ehdr.e_shentsize = translate(e, e32.e_shentsize);
+    ehdr.e_shnum = translate(e, e32.e_shnum);
+    ehdr.e_shstrndx = translate(e, e32.e_shstrndx);
+  } else {
+    ehdr = *(elfu_ehdr_t*)(e->raw + e->offset);
+
+    ehdr.e_type = translate(e, ehdr.e_type);
+    ehdr.e_machine = translate(e, ehdr.e_machine);
+    ehdr.e_version = translate(e, ehdr.e_version);
+    ehdr.e_entry = translate(e, ehdr.e_entry);
+    ehdr.e_phoff = translate(e, ehdr.e_phoff);
+    ehdr.e_shoff = translate(e, ehdr.e_shoff);
+    ehdr.e_flags = translate(e, ehdr.e_flags);
+    ehdr.e_ehsize = translate(e, ehdr.e_ehsize);
+    ehdr.e_phentsize = translate(e, ehdr.e_phentsize);
+    ehdr.e_phnum = translate(e, ehdr.e_phnum);
+    ehdr.e_shentsize = translate(e, ehdr.e_shentsize);
+    ehdr.e_shnum = translate(e, ehdr.e_shnum);
+    ehdr.e_shstrndx = translate(e, ehdr.e_shstrndx);
+  }
+
+  return ehdr;
+}
+
+static elfu_shdr_t _elfu_read_shdr(const elfu_t* e, const uintptr_t offset) {
+  elfu_shdr_t hdr = {};
+
+  if (e->class == CLASS32) {
+    Elf32_Shdr h32 = *(Elf32_Shdr*)(e->raw + offset);
+
+    hdr.sh_name = translate(e, h32.sh_name);
+    hdr.sh_type = translate(e, h32.sh_type);
+    hdr.sh_flags = translate(e, h32.sh_flags);
+    hdr.sh_addr = translate(e, h32.sh_addr);
+    hdr.sh_offset = translate(e, h32.sh_offset);
+    hdr.sh_size = translate(e, h32.sh_size);
+    hdr.sh_link = translate(e, h32.sh_link);
+    hdr.sh_info = translate(e, h32.sh_info);
+    hdr.sh_addralign = translate(e, h32.sh_addralign);
+    hdr.sh_entsize = translate(e, h32.sh_entsize);
+  } else {
+    hdr = *(elfu_shdr_t*)(e->raw + offset);
+
+    hdr.sh_name = translate(e, hdr.sh_name);
+    hdr.sh_type = translate(e, hdr.sh_type);
+    hdr.sh_flags = translate(e, hdr.sh_flags);
+    hdr.sh_addr = translate(e, hdr.sh_addr);
+    hdr.sh_offset = translate(e, hdr.sh_offset);
+    hdr.sh_size = translate(e, hdr.sh_size);
+    hdr.sh_link = translate(e, hdr.sh_link);
+    hdr.sh_info = translate(e, hdr.sh_info);
+    hdr.sh_addralign = translate(e, hdr.sh_addralign);
+    hdr.sh_entsize = translate(e, hdr.sh_entsize);
+  }
+
+  return hdr;
+}
+
+static elfu_isym_t _elfu_read_sym(const elfu_t* e, const uintptr_t offset) {
+  elfu_isym_t raw = {};
+
+  if (e->class == CLASS32) {
+    const auto s32 = *(Elf32_Sym*)(e->raw + offset);
+
+    raw.st_name = translate(e, s32.st_name);
+    raw.st_info = s32.st_info;
+    raw.st_other = s32.st_other;
+    raw.st_shndx = translate(e, s32.st_shndx);
+    raw.st_value = translate(e, s32.st_value);
+    raw.st_size = translate(e, s32.st_size);
+  } else {
+    raw = *(Elf64_Sym*)(e->raw + offset);
+
+    raw.st_name = translate(e, raw.st_name);
+    raw.st_shndx = translate(e, raw.st_shndx);
+    raw.st_value = translate(e, raw.st_value);
+    raw.st_size = translate(e, raw.st_size);
+  }
+
+  return raw;
+}
+
 static elfu_endian_t fetch_host_endian() {
   const union {
     u8 raw[4];
@@ -63,40 +161,7 @@ static bool elf_read_header(elfu_t* e) {
     return false;
   }
 
-  elfu_ehdr_t ehdr = {};
-  if (e->class == CLASS32) {
-    _elfu32_ehdr_t e32 = *(_elfu32_ehdr_t*)(e->raw + e->offset);
-
-    ehdr.e_type = translate(e, e32.e_type);
-    ehdr.e_machine = translate(e, e32.e_machine);
-    ehdr.e_version = translate(e, e32.e_version);
-    ehdr.e_entry = translate(e, e32.e_entry);
-    ehdr.e_phoff = translate(e, e32.e_phoff);
-    ehdr.e_shoff = translate(e, e32.e_shoff);
-    ehdr.e_flags = translate(e, e32.e_flags);
-    ehdr.e_ehsize = translate(e, e32.e_ehsize);
-    ehdr.e_phentsize = translate(e, e32.e_phentsize);
-    ehdr.e_phnum = translate(e, e32.e_phnum);
-    ehdr.e_shentsize = translate(e, e32.e_shentsize);
-    ehdr.e_shnum = translate(e, e32.e_shnum);
-    ehdr.e_shstrndx = translate(e, e32.e_shstrndx);
-  } else {
-    ehdr = *(elfu_ehdr_t*)(e->raw + e->offset);
-
-    ehdr.e_type = translate(e, ehdr.e_type);
-    ehdr.e_machine = translate(e, ehdr.e_machine);
-    ehdr.e_version = translate(e, ehdr.e_version);
-    ehdr.e_entry = translate(e, ehdr.e_entry);
-    ehdr.e_phoff = translate(e, ehdr.e_phoff);
-    ehdr.e_shoff = translate(e, ehdr.e_shoff);
-    ehdr.e_flags = translate(e, ehdr.e_flags);
-    ehdr.e_ehsize = translate(e, ehdr.e_ehsize);
-    ehdr.e_phentsize = translate(e, ehdr.e_phentsize);
-    ehdr.e_phnum = translate(e, ehdr.e_phnum);
-    ehdr.e_shentsize = translate(e, ehdr.e_shentsize);
-    ehdr.e_shnum = translate(e, ehdr.e_shnum);
-    ehdr.e_shstrndx = translate(e, ehdr.e_shstrndx);
-  }
+  const auto ehdr = _elfu_read_ehdr(e, e->offset);
 
   e->flags.ehdr = true;
   e->ehdr = ehdr;
@@ -104,8 +169,6 @@ static bool elf_read_header(elfu_t* e) {
 
   return true;
 }
-
-#include <stdio.h>
 
 elfu_t* elfu_new(const int fd) {
   elfu_t* elf = malloc(sizeof(elfu_t));
@@ -187,6 +250,95 @@ bool elfu_get_dynsymtab(const elfu_t* e, elfu_section_t* dynsymtab) {
   return _elfu_first_section_by_type(e, SHT_DYNSYM, dynsymtab);
 }
 
+bool elfu_sym_iter_next(elfu_sym_iter_t* i, elfu_sym_t* sym) {
+  if (!i || !sym) {
+    seterr(ELFU_INVALID_ARG);
+    return false;
+  }
+
+  if (i->cursor >= i->total)
+    return false;
+
+  const auto e = i->elf;
+  const auto symtab = i->symtab;
+  const auto entry_size = (e->class == CLASS64) ? sizeof(Elf64_Sym) : sizeof(Elf32_Sym);
+  const auto off = symtab->hdr.sh_offset + i->cursor * entry_size;
+
+  if (off + entry_size < off || e->fsize < off + entry_size) {
+    seterr(ELFU_MALFORMED);
+    return false;
+  }
+
+  const char* name = nullptr;
+  const char* version = nullptr;
+  const auto raw = _elfu_read_sym(e, off);
+
+  if (ELF64_ST_TYPE(raw.st_info) == STT_SECTION &&
+      (name = elfu_get_section_name(e, raw.st_shndx)) == nullptr)
+    name = "<corrupt>";
+  if (!name && (name = elfu_strptr(e, symtab->hdr.sh_link, raw.st_name)) == nullptr)
+    name = "<corrupt>";
+
+  if (i->has_version) {
+    // TODO: version retrieval
+  }
+
+  *sym = (elfu_sym_t){
+      .name = name,
+      .version = version,
+      .sym = raw,
+  };
+  i->cursor++;
+
+  return true;
+}
+
+bool elfu_get_sym_iter(const elfu_t* e, const elfu_section_t* symtab, elfu_sym_iter_t* i) {
+  if (!e || !symtab) {
+    seterr(ELFU_INVALID_ARG);
+    return false;
+  }
+
+  // We assume `symtab` is valid and was obtained using `elfu_get_section`.
+
+  const auto hdr = symtab->hdr;
+  if (hdr.sh_type != SHT_SYMTAB && hdr.sh_type != SHT_DYNSYM) {
+    seterr(ELFU_INVALID_ARG);
+    return false;
+  }
+
+  const auto entry_size = (e->class == CLASS64) ? sizeof(Elf64_Sym) : sizeof(Elf32_Sym);
+  if (hdr.sh_entsize != entry_size) {
+    seterr(ELFU_MALFORMED);
+    return false;
+  }
+
+  const auto count = hdr.sh_size / hdr.sh_entsize;
+
+  elfu_sym_iter_t iter = {};
+  // If it is a dynsym section we're trying to iterate, we try to find the associated
+  // version sections
+  if (hdr.sh_type == SHT_DYNSYM) {
+    elfu_section_t versym;
+    elfu_section_t verneed;
+    if (_elfu_first_section_by_type(e, SHT_GNU_versym, &versym) &&
+        _elfu_first_section_by_type(e, SHT_GNU_verneed, &verneed)) {
+      iter.has_version = true;
+      iter.versym = versym;
+      iter.verneed = verneed;
+    }
+  }
+
+  iter.total = count;
+  iter.elf = e;
+  iter.symtab = symtab;
+  iter.cursor = 1;
+
+  *i = iter;
+
+  return true;
+}
+
 bool elfu_get_section(const elfu_t* e, const size_t index, elfu_section_t* section) {
   if (!e || !section || !e->flags.ehdr) {
     seterr(ELFU_INVALID_ARG);
@@ -207,34 +359,7 @@ bool elfu_get_section(const elfu_t* e, const size_t index, elfu_section_t* secti
     return false;
   }
 
-  elfu_shdr_t hdr = {};
-  if (e->class == CLASS32) {
-    Elf32_Shdr h32 = *(Elf32_Shdr*)(e->raw + off);
-
-    hdr.sh_name = translate(e, h32.sh_name);
-    hdr.sh_type = translate(e, h32.sh_type);
-    hdr.sh_flags = translate(e, h32.sh_flags);
-    hdr.sh_addr = translate(e, h32.sh_addr);
-    hdr.sh_offset = translate(e, h32.sh_offset);
-    hdr.sh_size = translate(e, h32.sh_size);
-    hdr.sh_link = translate(e, h32.sh_link);
-    hdr.sh_info = translate(e, h32.sh_info);
-    hdr.sh_addralign = translate(e, h32.sh_addralign);
-    hdr.sh_entsize = translate(e, h32.sh_entsize);
-  } else {
-    hdr = *(elfu_shdr_t*)(e->raw + off);
-
-    hdr.sh_name = translate(e, hdr.sh_name);
-    hdr.sh_type = translate(e, hdr.sh_type);
-    hdr.sh_flags = translate(e, hdr.sh_flags);
-    hdr.sh_addr = translate(e, hdr.sh_addr);
-    hdr.sh_offset = translate(e, hdr.sh_offset);
-    hdr.sh_size = translate(e, hdr.sh_size);
-    hdr.sh_link = translate(e, hdr.sh_link);
-    hdr.sh_info = translate(e, hdr.sh_info);
-    hdr.sh_addralign = translate(e, hdr.sh_addralign);
-    hdr.sh_entsize = translate(e, hdr.sh_entsize);
-  }
+  const auto hdr = _elfu_read_shdr(e, off);
 
   const auto section_start = hdr.sh_addr;
   const auto section_end = hdr.sh_addr + hdr.sh_size;
@@ -279,6 +404,8 @@ const char* elfu_strptr(const elfu_t* e, const size_t index, const size_t str) {
   if (e->fsize < end - (uintptr_t)e->raw)
     return nullptr;
 
+  // We do this check to ensure the strtab is actually null terminated and that in the
+  // worst case we don't read out of bounds.
   if (*(strtab.data + strtab.hdr.sh_size) != 0)
     return nullptr;
 

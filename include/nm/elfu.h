@@ -88,6 +88,14 @@ typedef struct {
 } elfu_ehdr_t;
 
 typedef Elf64_Shdr elfu_shdr_t;
+typedef Elf64_Sym elfu_isym_t;
+
+typedef struct {
+  const char* name;
+  const char* version;  // Version string, nullptr if the symbol is not dynamic
+
+  elfu_isym_t sym;
+} elfu_sym_t;
 
 typedef struct {
   elfu_shdr_t hdr;  // Section header
@@ -113,6 +121,18 @@ typedef struct _elfu_t {
     bool ehdr : 1;
   } flags;
 } elfu_t;
+
+typedef struct {
+  size_t total;
+  size_t cursor;
+
+  bool has_version;
+  elfu_section_t versym;
+  elfu_section_t verneed;
+
+  const elfu_t* elf;
+  const elfu_section_t* symtab;
+} elfu_sym_iter_t;
 
 /*!
  * This function will allocate a new \c elfu_t object and map the passed object in memory.
@@ -174,6 +194,23 @@ const char* elfu_get_section_name(const elfu_t* e, size_t index);
  * @return A pointer to the string on success. \c nullptr on failure.
  */
 const char* elfu_strptr(const elfu_t* e, size_t index, size_t str);
+
+/*!
+ * Initialize a symbol iterator for the given symbol table.
+ * @param e The \c elfu_t object.
+ * @param symtab The symbol table section.
+ * @param i[out] The \c elfu_sym_iter_t to initialize.
+ * @return Whether the operation was successful.
+ */
+bool elfu_get_sym_iter(const elfu_t* e, const elfu_section_t* symtab, elfu_sym_iter_t* i);
+
+/*!
+ * Retrieve the next symbol from the symbol iterator.
+ * @param i The \c elfu_sym_iter_t iterator.
+ * @param sym[out] The \c elfu_sym_t to fill.
+ * @return Whether a symbol was retrieved. \c false if there is no symbol left or an error occurred.
+ */
+bool elfu_sym_iter_next(elfu_sym_iter_t* i, elfu_sym_t* sym);
 
 /*!
  * @return Whether the library is in an error state or not.

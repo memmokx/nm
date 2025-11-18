@@ -51,11 +51,14 @@ typedef enum {
   SYM_UNKNOWN = '?',
 } nm_sym_type_t;
 
+#include "elfu.h"
+
 typedef struct {
   const char* name;
+  const char* version;
+  elfu_isym_t o;
   nm_sym_type_t type;
   uint64_t value;
-  Elf64_Sym o;
 } nm_symbol_t;
 
 typedef int (*cmp_fn)(const nm_symbol_t*, const nm_symbol_t*);
