@@ -141,6 +141,7 @@ static ssize_t nm_process_symtab(const elfu_t* obj,
         .type = nm_sym_type(obj, s.sym),
         .value = s.sym.st_value,
         .o = s.sym,
+        .pos = iter.cursor,
     };
 
     if (!nm_symbol_vector_push(symbols, symbol))
@@ -186,9 +187,10 @@ static void nm_display_symbol(const nm_symbol_t* s, const bool bits_64) {
 }
 
 static int nm_cmp_symbol(const nm_symbol_t* a, const nm_symbol_t* b) {
-  if (flag_reverse_sort)
-    return -nm_strcmp(a->name, b->name);
-  return nm_strcmp(a->name, b->name);
+  auto cmp = nm_strcmp(a->name, b->name);
+  if (cmp == 0)
+    cmp = (int)a->pos - (int)b->pos;
+  return flag_reverse_sort ? -cmp : cmp;
 }
 
 static bool nm_list_symbols(const elfu_t* obj) {

@@ -59,6 +59,7 @@ typedef struct {
   elfu_isym_t o;
   nm_sym_type_t type;
   uint64_t value;
+  size_t pos;
 } nm_symbol_t;
 
 typedef int (*cmp_fn)(const nm_symbol_t*, const nm_symbol_t*);
