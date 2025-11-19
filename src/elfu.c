@@ -454,6 +454,14 @@ bool elfu_get_section(const elfu_t* e, const size_t index, elfu_section_t* secti
   }
 
   const auto hdr = _elfu_read_shdr(e, off);
+  if (hdr.sh_type == SHT_NOBITS) {
+    *section = (elfu_section_t){
+        .hdr = hdr,
+        .data = nullptr,
+        .elf = e,
+    };
+    return true;
+  }
 
   const auto section_start = hdr.sh_offset;
   const auto section_end = hdr.sh_offset + hdr.sh_size;
