@@ -178,6 +178,10 @@ static void nm_display_symbol(const nm_symbol_t* s, const bool bits_64) {
   nm_symbol_put_value(s, bits_64);
   nm_putstr((char[]){' ', (char)s->type, ' ', 0});
   nm_putstr(s->name);
+  if (s->version) {
+    nm_putstr("@");
+    nm_putstr(s->version);
+  }
   nm_putstr("\n");
 }
 
