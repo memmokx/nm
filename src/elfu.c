@@ -171,7 +171,14 @@ static bool elf_read_ident(elfu_t* e) {
   }
 
   e->class = id->class;
-  e->endian = id->data;  // TODO: handle ELFDATANONE
+  e->endian = id->data;
+
+  if ((e->class != CLASS32 && e->class != CLASS64) ||
+      (e->endian != ENDIAN_LITTLE && e->endian != ENDIAN_BIG)) {
+    seterr(ELFU_UNKNOWN_FORMAT);
+    return false;
+  }
+
   e->offset += sizeof(elf_ident_t);
 
   return true;
@@ -205,6 +212,16 @@ elfu_t* elfu_new(const int fd) {
   struct stat st;
   if (fstat(fd, &st) < 0) {
     seterr(ELFU_SYS_ERR);
+    goto err;
+  }
+
+  if (S_ISDIR(st.st_mode)) {
+    seterr(ELFU_IS_DIR);
+    goto err;
+  }
+
+  if (!S_ISREG(st.st_mode)) {
+    seterr(ELFU_NOTA_FILE);
     goto err;
   }
 
@@ -409,9 +426,15 @@ bool elfu_get_sym_iter(const elfu_t* e, const elfu_section_t* symtab, elfu_sym_i
 
   const auto count = hdr.sh_size / hdr.sh_entsize;
 
-  elfu_sym_iter_t iter = {};
+  elfu_sym_iter_t iter = {
+      .elf = e,
+      .symtab = symtab,
+      .cursor = 1,
+      .total = count,
+  };
   // If it is a dynsym section we're trying to iterate, we try to find the associated
   // version sections
+  // TODO: handle verdef
   if (hdr.sh_type == SHT_DYNSYM) {
     elfu_section_t versym;
     elfu_section_t verneed;
@@ -422,11 +445,6 @@ bool elfu_get_sym_iter(const elfu_t* e, const elfu_section_t* symtab, elfu_sym_i
       iter.verneed = verneed;
     }
   }
-
-  iter.total = count;
-  iter.elf = e;
-  iter.symtab = symtab;
-  iter.cursor = 1;
 
   *i = iter;
 
@@ -508,7 +526,10 @@ const char* elfu_strptr(const elfu_t* e, const size_t index, const size_t str) {
 
   // We do this check to ensure the strtab is actually null terminated and that in the
   // worst case we don't read out of bounds.
-  if (*(strtab.data + strtab.hdr.sh_size) != 0)
+  const auto strtab_size = strtab.hdr.sh_size;
+  if (strtab_size == 0)
+    return nullptr;
+  if (*(strtab.data + strtab_size - 1) != 0 && *(strtab.data + strtab_size) != 0)
     return nullptr;
 
   return (const char*)(strtab.data + str);

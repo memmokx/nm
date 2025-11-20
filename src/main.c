@@ -33,15 +33,18 @@ static auto symtab_fetch = elfu_get_symtab;
     nm_putstr_fd(STDERR_FILENO, "\n");       \
   } while (false)
 
-#define nm_warn(err)                         \
+#define nm_warn_p(err, prefix)               \
   do {                                       \
     nm_putstr_fd(STDERR_FILENO, "nm: ");     \
+    nm_putstr_fd(STDERR_FILENO, (prefix));   \
     nm_putstr_fd(STDERR_FILENO, "'");        \
     nm_putstr_fd(STDERR_FILENO, g_filename); \
-    nm_putstr_fd(STDERR_FILENO, "': ");      \
+    nm_putstr_fd(STDERR_FILENO, "' ");       \
     nm_putstr_fd(STDERR_FILENO, (err));      \
     nm_putstr_fd(STDERR_FILENO, "\n");       \
   } while (false)
+
+#define nm_warn(err) nm_warn_p(err, "")
 
 static nm_sym_type_t nm_section_type(const elfu_t* obj, const size_t index) {
   // Obviously not a valid section index
@@ -125,7 +128,8 @@ static bool nm_keep_symbol(const elfu_t* obj, const Elf64_Sym s) {
  */
 static ssize_t nm_process_symtab(const elfu_t* obj,
                                  const elfu_section_t* symtab,
-                                 nm_symbol_vector_t* symbols) {
+                                 nm_symbol_vector_t* symbols,
+                                 bool* has_symbols) {
   elfu_sym_iter_t iter;
   if (!elfu_get_sym_iter(obj, symtab, &iter))
     return -1;
@@ -147,6 +151,8 @@ static ssize_t nm_process_symtab(const elfu_t* obj,
     if (!nm_symbol_vector_push(symbols, symbol))
       return -1;
   }
+
+  *has_symbols = (iter.total > 0);
 
   return (ssize_t)iter.total;
 }
@@ -200,11 +206,8 @@ static bool nm_list_symbols(const elfu_t* obj) {
     return false;
 
   elfu_section_t sym;
-  if (symtab_fetch(obj, &sym) && nm_process_symtab(obj, &sym, &symbols) < 0)
+  if (symtab_fetch(obj, &sym) && nm_process_symtab(obj, &sym, &symbols, &ret) < 0)
     goto err;
-
-  if (symbols.len != 0)
-    ret = true;
 
   if (!flag_no_sort)
     heapsort(symbols.ptr, symbols.len, nm_cmp_symbol);
@@ -218,7 +221,26 @@ err:
   return ret;
 }
 
-int nm_process_file(const char* name) {
+static void nm_print_err() {
+  switch (elfu_get_err()) {
+    case ELFU_UNKNOWN_FORMAT:
+      nm_err("file format not recognized");
+      break;
+    case ELFU_SYS_ERR:
+      nm_warn(strerror(errno));
+      break;
+    case ELFU_NOTA_FILE:
+      nm_warn_p("is not an ordinary file", "Warning: ");
+      break;
+    case ELFU_IS_DIR:
+      nm_warn_p("is a directory", "Warning: ");
+      break;
+    default:
+      break;
+  }
+}
+
+static int nm_process_file(const char* name, bool print_filename) {
   int exit_code = EXIT_SUCCESS;
   elfu_t* obj = nullptr;
 
@@ -226,16 +248,22 @@ int nm_process_file(const char* name) {
 
   const int fd = open(name, O_RDONLY);
   if (fd < 0) {
-    nm_warn(strerror(errno));
+    if (errno == ENOENT)
+      nm_warn("No such file");
+    else
+      nm_err(strerror(errno));
     goto err;
   }
 
   if ((obj = elfu_new(fd)) == nullptr) {
-    if (elfu_get_err() == ELFU_UNKNOWN_FORMAT)
-      nm_err("file format not recognized");
-    else if (elfu_get_err() == ELFU_SYS_ERR)
-      nm_warn(strerror(errno));
+    nm_print_err();
     goto err;
+  }
+
+  if (print_filename) {
+    nm_putstr("\n");
+    nm_putstr(name);
+    nm_putstr(":\n");
   }
 
   if (!nm_list_symbols(obj))
@@ -290,17 +318,14 @@ int main(int argc, char** argv) {
   argv += opt.argc;
 
   if (argc == 0)
-    return nm_process_file(NM_DEFAULT_PROGRAM);
+    return nm_process_file(NM_DEFAULT_PROGRAM, false);
   if (argc == 1)
-    return nm_process_file(argv[0]);
+    return nm_process_file(argv[0], false);
 
   int exit_code = EXIT_SUCCESS;
   if (argc > 1) {
     for (int i = 0; i < argc; i++) {
-      nm_putstr("\n");
-      nm_putstr(argv[i]);
-      nm_putstr(":\n");
-      exit_code += nm_process_file(argv[i]);
+      exit_code += nm_process_file(argv[i], true);
     }
   }
 

@@ -17,8 +17,8 @@ typedef enum {
   // "D" "d" The symbol is in the initialized data section.
   SYM_INITD_G = 'D',
   SYM_INITD_L = 'd',
-  // "I" The symbol is an indirect reference to another symbol.
-  SYM_INDIR = 'I',
+  // "i" The symbol is an indirect reference to another symbol.
+  SYM_INDIR = 'i',
   // "N" The symbol is a debugging symbol.
   SYM_DEBUG = 'N',
   // "n" The symbol is in a non-data, non-code, non-debug read-only section.

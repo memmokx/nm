@@ -20,6 +20,8 @@ typedef enum {
   ELFU_MAP_FAILED,
   // A syscall failed, errno is set with the correct error.
   ELFU_SYS_ERR,
+  ELFU_IS_DIR,
+  ELFU_NOTA_FILE,
   ELFU_OUT_OF_MEMORY,
   ELFU_INVALID_ARG,
   ELFU_MALFORMED,
