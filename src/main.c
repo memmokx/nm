@@ -152,7 +152,7 @@ static ssize_t nm_process_symtab(const elfu_t* obj,
       return -1;
   }
 
-  *has_symbols = (iter.total > 0);
+  *has_symbols = (iter.total > 1);
 
   return (ssize_t)iter.total;
 }
