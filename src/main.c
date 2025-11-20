@@ -110,7 +110,7 @@ static bool nm_keep_symbol(const elfu_t* obj, const Elf64_Sym s) {
   if (flag_only_undefined)
     return (s.st_shndx == SHN_UNDEF);
   if (flag_only_external)
-    return (bind == STB_GLOBAL || bind == STB_WEAK);
+    return (bind == STB_GLOBAL || bind == STB_WEAK || bind == STB_GNU_UNIQUE);
   if (flag_no_filter)
     return true;
 
