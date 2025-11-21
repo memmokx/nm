@@ -124,13 +124,26 @@ typedef struct _elfu_t {
   } flags;
 } elfu_t;
 
+enum {
+  ELFU_VER_NONE = 0,
+  ELFU_VER_NEED = 1,
+  ELFU_VER_DEF = 2,
+};
+
+typedef struct {
+  elfu_section_t versym;
+  elfu_section_t verneed;
+  elfu_section_t verdef;
+
+  u8 flags;
+} elfu_version_t;
+
 typedef struct {
   size_t total;
   size_t cursor;
 
   bool has_version;
-  elfu_section_t versym;
-  elfu_section_t verneed;
+  elfu_version_t version;
 
   const elfu_t* elf;
   const elfu_section_t* symtab;

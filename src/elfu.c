@@ -147,6 +147,30 @@ static Elf64_Vernaux _elfu_read_vernaux(const elfu_t* e, const uintptr_t offset)
   return raw;
 }
 
+static __attribute_maybe_unused__ Elf64_Verdef _elfu_read_verdef(const elfu_t* e,
+                                                                 const uintptr_t offset) {
+  Elf64_Verdef raw = *(Elf64_Verdef*)(e->raw + offset);
+
+  raw.vd_version = translate(e, raw.vd_version);
+  raw.vd_flags = translate(e, raw.vd_flags);
+  raw.vd_ndx = translate(e, raw.vd_ndx);
+  raw.vd_cnt = translate(e, raw.vd_cnt);
+  raw.vd_aux = translate(e, raw.vd_aux);
+  raw.vd_next = translate(e, raw.vd_next);
+
+  return raw;
+}
+
+static __attribute_maybe_unused__ Elf64_Verdaux _elfu_read_verdaux(const elfu_t* e,
+                                                                   const uintptr_t offset) {
+  Elf64_Verdaux raw = *(Elf64_Verdaux*)(e->raw + offset);
+
+  raw.vda_name = translate(e, raw.vda_name);
+  raw.vda_next = translate(e, raw.vda_next);
+
+  return raw;
+}
+
 static elfu_endian_t fetch_host_endian() {
   const union {
     u8 raw[4];
@@ -284,9 +308,57 @@ static bool _elfu_first_section_by_type(const elfu_t* e,
   return false;
 }
 
+static const char* _elfu_version_from_verdef(const elfu_section_t* verdef,
+                                             const size_t version) {
+  const auto e = verdef->elf;
+  (void)version;
+  (void)e;
+  return nullptr;
+}
+
+static const char* _elfu_version_from_verneed(const elfu_section_t* verneed,
+                                              const size_t version) {
+  // TODO: this feels repetitive ...
+  const auto e = verneed->elf;
+  const auto base = (uintptr_t)verneed->hdr.sh_offset;
+  const auto end = base + verneed->hdr.sh_size;
+  const auto strtab = verneed->hdr.sh_link;
+
+  if (verneed->hdr.sh_size == 0 || e->fsize < base || e->fsize < end)
+    return nullptr;
+
+  uintptr_t cursor = 0;
+  uintptr_t vnoff = 0;
+  for (size_t i = 0; i < verneed->hdr.sh_info; i++) {
+    cursor = base + vnoff;
+    if (cursor + sizeof(Elf64_Verneed) < cursor || end < cursor + sizeof(Elf64_Verneed)) {
+      seterr(ELFU_MALFORMED);
+      return nullptr;
+    }
+
+    const auto vn = _elfu_read_verneed(e, cursor);
+    cursor += vn.vn_aux;
+
+    for (size_t aux = 0; aux < vn.vn_cnt; aux++) {
+      if (cursor + sizeof(Elf64_Vernaux) < cursor || end < cursor + sizeof(Elf64_Vernaux)) {
+        seterr(ELFU_MALFORMED);
+        return nullptr;
+      }
+
+      const auto vnaux = _elfu_read_vernaux(e, cursor);
+      if (vnaux.vna_other == version)
+        return elfu_strptr(e, strtab, vnaux.vna_name);
+      cursor += vnaux.vna_next;
+    }
+
+    vnoff += vn.vn_next;
+  }
+
+  return nullptr;
+}
+
 static const char* _elfu_get_sym_version(const elfu_t* e,
-                                         const elfu_section_t* versym,
-                                         const elfu_section_t* verneed,
+                                         const elfu_version_t* v,
                                          const size_t index) {
   // https://lists.debian.org/lsb-spec/1999/12/msg00017.html
   // https://www.gabriel.urdhr.fr/2015/09/28/elf-file-format/#symbol-versions
@@ -302,6 +374,10 @@ static const char* _elfu_get_sym_version(const elfu_t* e,
   //      0x60: Elf*_Verneed: {.., vn_cnt: 3, ...}
   //      0x70: Elf*_Vernaux: {.., vna_name: offset to string table}
 
+  const auto versym = &v->versym;
+  const auto verneed = (v->flags & ELFU_VER_NEED) ? &v->verneed : nullptr;
+  const auto verdef = (v->flags & ELFU_VER_DEF) ? &v->verdef : nullptr;
+
   const auto versym_base = (uintptr_t)versym->data;
   const auto versym_offset = index * sizeof(u16);
   if (versym_offset + sizeof(u16) < versym_offset ||
@@ -314,43 +390,13 @@ static const char* _elfu_get_sym_version(const elfu_t* e,
   if (version == VER_NDX_LOCAL || version == VER_NDX_GLOBAL)
     return nullptr;
 
-  const auto verneed_base = (uintptr_t)verneed->hdr.sh_offset;
-  const auto verneed_end = verneed_base + verneed->hdr.sh_size;
-  const auto version_strtab = verneed->hdr.sh_link;
-  if (verneed->hdr.sh_size == 0 || e->fsize < verneed_base || e->fsize < verneed_end)
-    return nullptr;
+  // TODO: handle version visibility, nm will print @@ for hidden versions
+  // related: https://github.com/golang/go/issues/63952#issuecomment-1936641809
 
-  // TODO: this seems convoluted
-  uintptr_t cursor = 0;
-  uintptr_t vnoff = 0;
-  for (size_t i = 0; i < verneed->hdr.sh_info; i++) {
-    cursor = verneed_base + vnoff;
-    if (cursor + sizeof(Elf64_Verneed) < cursor ||
-        verneed_end < cursor + sizeof(Elf64_Verneed)) {
-      seterr(ELFU_MALFORMED);
-      return nullptr;
-    }
-
-    const auto vn = _elfu_read_verneed(e, cursor);
-    cursor += vn.vn_aux;
-
-    for (size_t aux = 0; aux < vn.vn_cnt; aux++) {
-      if (cursor + sizeof(Elf64_Vernaux) < cursor ||
-          verneed_end < cursor + sizeof(Elf64_Vernaux)) {
-        seterr(ELFU_MALFORMED);
-        return nullptr;
-      }
-
-      const auto vnaux = _elfu_read_vernaux(e, cursor);
-      if (vnaux.vna_other == version)
-        return elfu_strptr(e, version_strtab, vnaux.vna_name);
-      cursor += vnaux.vna_next;
-    }
-
-    vnoff += vn.vn_next;
-  }
-
-  return nullptr;
+  const char* name;
+  if (verneed != nullptr && (name = _elfu_version_from_verneed(verneed, version)) != nullptr)
+    return name;
+  return (verdef != nullptr) ? _elfu_version_from_verdef(verdef, version) : nullptr;
 }
 
 bool elfu_get_symtab(const elfu_t* e, elfu_section_t* symtab) {
@@ -391,7 +437,7 @@ bool elfu_sym_iter_next(elfu_sym_iter_t* i, elfu_sym_t* sym) {
     name = "<corrupt>";
 
   if (i->has_version)
-    version = _elfu_get_sym_version(e, &i->versym, &i->verneed, i->cursor);
+    version = _elfu_get_sym_version(e, &i->version, i->cursor);
 
   *sym = (elfu_sym_t){
       .name = name,
@@ -432,17 +478,25 @@ bool elfu_get_sym_iter(const elfu_t* e, const elfu_section_t* symtab, elfu_sym_i
       .cursor = 1,
       .total = count,
   };
+
   // If it is a dynsym section we're trying to iterate, we try to find the associated
   // version sections
-  // TODO: handle verdef
   if (hdr.sh_type == SHT_DYNSYM) {
     elfu_section_t versym;
     elfu_section_t verneed;
-    if (_elfu_first_section_by_type(e, SHT_GNU_versym, &versym) &&
-        _elfu_first_section_by_type(e, SHT_GNU_verneed, &verneed)) {
+    elfu_section_t verdef;
+
+    if (_elfu_first_section_by_type(e, SHT_GNU_versym, &versym)) {
       iter.has_version = true;
-      iter.versym = versym;
-      iter.verneed = verneed;
+      iter.version.flags = ELFU_VER_NONE;
+      if (_elfu_first_section_by_type(e, SHT_GNU_verneed, &verneed)) {
+        iter.version.verneed = verneed;
+        iter.version.flags |= ELFU_VER_NEED;
+      }
+      if (_elfu_first_section_by_type(e, SHT_GNU_verdef, &verdef)) {
+        iter.version.verdef = verdef;
+        iter.version.flags |= ELFU_VER_DEF;
+      }
     }
   }
 
