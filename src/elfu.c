@@ -309,10 +309,43 @@ static bool _elfu_first_section_by_type(const elfu_t* e,
 }
 
 static const char* _elfu_version_from_verdef(const elfu_section_t* verdef,
+                                             const elfu_isym_t* sym,
                                              const size_t version) {
   const auto e = verdef->elf;
-  (void)version;
-  (void)e;
+  const auto base = (uintptr_t)verdef->hdr.sh_offset;
+  const auto end = base + verdef->hdr.sh_size;
+  const auto strtab = verdef->hdr.sh_link;
+
+  if (verdef->hdr.sh_size == 0 || e->fsize < base || e->fsize < end)
+    return nullptr;
+
+  uintptr_t cursor = 0;
+  uintptr_t vnoff = 0;
+  for (size_t i = 0; i < verdef->hdr.sh_info; i++) {
+    cursor = base + vnoff;
+    if (cursor + sizeof(Elf64_Verdef) < cursor || end < cursor + sizeof(Elf64_Verdef)) {
+      seterr(ELFU_MALFORMED);
+      return nullptr;
+    }
+
+    const auto vd = _elfu_read_verdef(e, cursor);
+    if (vd.vd_ndx == version) {
+      cursor += vd.vd_aux;
+      if (cursor + sizeof(Elf64_Verdaux) < cursor || end < cursor + sizeof(Elf64_Verdaux)) {
+        seterr(ELFU_MALFORMED);
+        return nullptr;
+      }
+
+      const auto vdaux = _elfu_read_verdaux(e, cursor);
+      // If the name is the same as the symbol name, avoid returning it as its redundant.
+      // nm seems to be doing this so we follow the same behavior.
+      return (vdaux.vda_name != sym->st_name) ? elfu_strptr(e, strtab, vdaux.vda_name)
+                                              : nullptr;
+    }
+
+    vnoff += vd.vd_next;
+  }
+
   return nullptr;
 }
 
@@ -357,9 +390,14 @@ static const char* _elfu_version_from_verneed(const elfu_section_t* verneed,
   return nullptr;
 }
 
+#define VERSYM_HIDDEN 0x8000
+#define VERSYM_VERSION 0x7fff
+
 static const char* _elfu_get_sym_version(const elfu_t* e,
                                          const elfu_version_t* v,
-                                         const size_t index) {
+                                         const elfu_isym_t* sym,
+                                         const size_t index,
+                                         bool* hidden) {
   // https://lists.debian.org/lsb-spec/1999/12/msg00017.html
   // https://www.gabriel.urdhr.fr/2015/09/28/elf-file-format/#symbol-versions
 
@@ -387,16 +425,24 @@ static const char* _elfu_get_sym_version(const elfu_t* e,
   }
 
   const auto version = translate(e, *(u16*)(versym_base + versym_offset));
-  if (version == VER_NDX_LOCAL || version == VER_NDX_GLOBAL)
+  if ((version & VERSYM_VERSION) == VER_NDX_LOCAL ||
+      (version & VERSYM_VERSION) == VER_NDX_GLOBAL)
     return nullptr;
 
-  // TODO: handle version visibility, nm will print @@ for hidden versions
   // related: https://github.com/golang/go/issues/63952#issuecomment-1936641809
+  if ((version & VERSYM_HIDDEN) != 0)
+    *hidden = true;
 
-  const char* name;
-  if (verneed != nullptr && (name = _elfu_version_from_verneed(verneed, version)) != nullptr)
-    return name;
-  return (verdef != nullptr) ? _elfu_version_from_verdef(verdef, version) : nullptr;
+  if (sym->st_shndx != SHN_UNDEF && version != (VERSYM_HIDDEN | 0x1) && verdef != nullptr) {
+    const char* name;
+    if ((name = _elfu_version_from_verdef(verdef, sym, version & VERSYM_VERSION)))
+      return name;
+  }
+
+  // The verneed section holds the version information for undefined symbols, thus the
+  // symbol is definitely hidden.
+  *hidden = true;
+  return (verneed != nullptr) ? _elfu_version_from_verneed(verneed, version) : nullptr;
 }
 
 bool elfu_get_symtab(const elfu_t* e, elfu_section_t* symtab) {
@@ -436,12 +482,14 @@ bool elfu_sym_iter_next(elfu_sym_iter_t* i, elfu_sym_t* sym) {
   if (!name && (name = elfu_strptr(e, symtab->hdr.sh_link, raw.st_name)) == nullptr)
     name = "<corrupt>";
 
+  bool hidden = false;
   if (i->has_version)
-    version = _elfu_get_sym_version(e, &i->version, i->cursor);
+    version = _elfu_get_sym_version(e, &i->version, &raw, i->cursor, &hidden);
 
   *sym = (elfu_sym_t){
       .name = name,
       .version = version,
+      .version_hidden = hidden,
       .sym = raw,
   };
 
@@ -489,10 +537,13 @@ bool elfu_get_sym_iter(const elfu_t* e, const elfu_section_t* symtab, elfu_sym_i
     if (_elfu_first_section_by_type(e, SHT_GNU_versym, &versym)) {
       iter.has_version = true;
       iter.version.flags = ELFU_VER_NONE;
+      iter.version.versym = versym;
+
       if (_elfu_first_section_by_type(e, SHT_GNU_verneed, &verneed)) {
         iter.version.verneed = verneed;
         iter.version.flags |= ELFU_VER_NEED;
       }
+
       if (_elfu_first_section_by_type(e, SHT_GNU_verdef, &verdef)) {
         iter.version.verdef = verdef;
         iter.version.flags |= ELFU_VER_DEF;

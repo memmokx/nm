@@ -56,10 +56,13 @@ typedef enum {
 typedef struct {
   const char* name;
   const char* version;
-  elfu_isym_t o;
+  bool version_hidden;
+
   nm_sym_type_t type;
   uint64_t value;
-  size_t pos;
+
+  elfu_isym_t o;  // The original symbol
+  size_t pos;     // The symbol position in the table
 } nm_symbol_t;
 
 typedef int (*cmp_fn)(const nm_symbol_t*, const nm_symbol_t*);

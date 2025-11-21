@@ -142,6 +142,7 @@ static ssize_t nm_process_symtab(const elfu_t* obj,
     const nm_symbol_t symbol = {
         .name = s.name,
         .version = s.version,
+        .version_hidden = s.version_hidden,
         .type = nm_sym_type(obj, s.sym),
         .value = s.sym.st_value,
         .o = s.sym,
@@ -187,6 +188,8 @@ static void nm_display_symbol(const nm_symbol_t* s, const bool bits_64) {
   nm_putstr(s->name);
   if (s->version) {
     nm_putstr("@");
+    if (!s->version_hidden)
+      nm_putstr("@");
     nm_putstr(s->version);
   }
   nm_putstr("\n");

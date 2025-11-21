@@ -95,6 +95,7 @@ typedef Elf64_Sym elfu_isym_t;
 typedef struct {
   const char* name;
   const char* version;  // Version string, nullptr if the symbol is not dynamic
+  bool version_hidden;
 
   elfu_isym_t sym;
 } elfu_sym_t;
