@@ -51,6 +51,11 @@ static nm_sym_type_t nm_section_type(const elfu_t* obj, const size_t index) {
   if (index != SHN_UNDEF && index >= SHN_LORESERVE)
     return SYM_UNKNOWN;
 
+  // Really, really special case, when nm (bfd) encounters a symbol for which his section
+  // doesn't exist, it classifies it as absolute.
+  if (index > obj->ehdr.e_shnum)
+    return SYM_ABSOLUTE_L;
+
   elfu_section_t section;
   if (!elfu_get_section(obj, index, &section))
     return SYM_UNKNOWN;
