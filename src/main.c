@@ -60,6 +60,7 @@ static nm_sym_type_t nm_section_type(const elfu_t* obj, const size_t index) {
   if (!elfu_get_section(obj, index, &section))
     return SYM_UNKNOWN;
 
+  const auto section_name = elfu_strptr(obj, obj->ehdr.e_shstrndx, section.hdr.sh_name);
   const auto type = section.hdr.sh_type;
   const auto flags = section.hdr.sh_flags;
 
@@ -80,6 +81,8 @@ static nm_sym_type_t nm_section_type(const elfu_t* obj, const size_t index) {
     return SYM_INITD_L;
   if (data && ro)
     return SYM_RD_ONLY_DATA_L;
+  if (section_name && nm_strncmp(section_name, ".debug", 6) == 0)
+    return SYM_DEBUG;
   if (!code && !data && ro)
     return SYM_RD_ONLY;
   return SYM_UNKNOWN;

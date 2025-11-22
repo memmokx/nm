@@ -6,6 +6,7 @@
 void nm_putstr_fd(int fd, const char* str);
 void nm_putstr(const char* str);
 int nm_strcmp(const char* a, const char* b);
+int nm_strncmp(const char* a, const char* b, size_t n);
 void nm_memcpy(void* dst, const void* src, size_t n);
 
 #endif

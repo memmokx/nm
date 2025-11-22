@@ -30,3 +30,16 @@ int nm_strcmp(const char* a, const char* b) {
 
   return *(const u8*)a - *(const u8*)b;
 }
+
+int nm_strncmp(const char* a, const char* b, const size_t n) {
+  int64_t nn = (int64_t)n;
+  while (nn-- && *a && *b && *a == *b) {
+    a++;
+    b++;
+  }
+
+  if (nn == -1)
+    return 0;
+
+  return *(const u8*)a - *(const u8*)b;
+}
