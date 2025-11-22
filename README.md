@@ -5,6 +5,13 @@ Implementation of the `nm` command from binutils.
 As re-creating `strcoll` is out of scope for this project, invocations of the original `nm` binary MUST set the
 `LC_ALL` variable to `C`
 
+When given legal object files, the output is and should be identical to the output of the original `nm`.
+
+In illegal cases, the behavior should be close to the original but being strictly identical is not required and a
+non-goal.
+
+There's even cases where the original will crash when we can handle it gracefully.
+
 ## Allowed functions
 
 - open, close

@@ -63,19 +63,25 @@ static nm_sym_type_t nm_section_type(const elfu_t* obj, const size_t index) {
   const auto type = section.hdr.sh_type;
   const auto flags = section.hdr.sh_flags;
 
-  if (type == SHT_PROGBITS) {
+  const auto ro = (flags & SHF_WRITE) == 0;
+  const auto data = (flags & SHF_ALLOC) != 0;
+  const auto code = (flags & SHF_EXECINSTR) != 0;
+
+  if (type == SHT_PROGBITS && code) {
     // .text section
-    if (flags & SHF_EXECINSTR)
-      return SYM_CODE_L;
+    return SYM_CODE_L;
   }
+
   // .bss section
-  if (type == SHT_NOBITS && (flags & SHF_WRITE && flags & SHF_ALLOC))
+  if (type == SHT_NOBITS && (!ro && data))
     return SYM_BSS_L;
   // data sections
-  if (flags & SHF_WRITE && flags & SHF_ALLOC)
+  if (!ro && data)
     return SYM_INITD_L;
-  if ((flags & SHF_WRITE) == 0)
+  if (data && ro)
     return SYM_RD_ONLY_DATA_L;
+  if (!code && !data && ro)
+    return SYM_RD_ONLY;
   return SYM_UNKNOWN;
 }
 
