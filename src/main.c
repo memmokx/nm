@@ -150,12 +150,22 @@ static ssize_t nm_process_symtab(const elfu_t* obj,
     if (!nm_keep_symbol(obj, s.sym))
       continue;
 
+    const auto type = nm_sym_type(obj, s.sym);
+    // Again, cryptic case by nm. If the object is one of these two types, defined symbols
+    // will add the sh_addr to their value.
+    // readelf doesn't do that. elfutils nm neither.
+    const auto reloff =
+        (obj->ehdr.e_type == ET_EXEC || obj->ehdr.e_type == ET_DYN) ? 0 : s.sh_addr;
+    const auto value = (type == SYM_UNDEFINED || type == SYM_WEAK_OBJ_L || type == SYM_WEAK_L)
+                           ? 0
+                           : s.sym.st_value + reloff;
+
     const nm_symbol_t symbol = {
         .name = s.name,
         .version = s.version,
         .version_hidden = s.version_hidden,
         .type = nm_sym_type(obj, s.sym),
-        .value = s.sym.st_value,
+        .value = value,
         .o = s.sym,
         .pos = iter.cursor,
     };

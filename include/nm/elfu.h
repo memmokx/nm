@@ -97,6 +97,7 @@ typedef struct {
   const char* version;  // Version string, nullptr if the symbol is not dynamic
   bool version_hidden;
 
+  uint64_t sh_addr;  // The linked section address
   elfu_isym_t sym;
 } elfu_sym_t;
 

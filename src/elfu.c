@@ -486,10 +486,16 @@ bool elfu_sym_iter_next(elfu_sym_iter_t* i, elfu_sym_t* sym) {
   if (i->has_version)
     version = _elfu_get_sym_version(e, &i->version, &raw, i->cursor, &hidden);
 
+  uint64_t sh_addr = 0;
+  elfu_section_t section;
+  if (elfu_get_section(e, raw.st_shndx, &section))
+    sh_addr = section.hdr.sh_addr;
+
   *sym = (elfu_sym_t){
       .name = name,
       .version = version,
       .version_hidden = hidden,
+      .sh_addr = sh_addr,
       .sym = raw,
   };
 
