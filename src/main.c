@@ -20,7 +20,7 @@ static bool flag_only_external = false;
 static bool flag_dynamic = false;
 static bool flag_no_filter = false;
 
-static auto symtab_fetch = elfu_get_symtab;
+static auto nm_get_symtab_fn = elfu_get_symtab;
 
 // too lazy to pull libft ...
 
@@ -167,9 +167,9 @@ static ssize_t nm_process_symtab(const elfu_t* obj,
         .name = s.name,
         .version = s.version,
         .version_hidden = s.version_hidden,
-        .type = nm_sym_type(obj, s.sym),
+        .type = type,
         .value = value,
-        .o = s.sym,
+        .internal = s.sym,
         .pos = iter.cursor,
     };
 
@@ -188,7 +188,7 @@ static void nm_symbol_put_value(const nm_symbol_t* s, const bool bits_64) {
   char buffer[32] = {};
   auto value = s->value;
 
-  if (s->o.st_shndx != SHN_UNDEF) {
+  if (s->internal.st_shndx != SHN_UNDEF) {
     char* h = buffer + width;
 
     while (value > 0 && h != buffer) {
@@ -233,7 +233,7 @@ static bool nm_list_symbols(const elfu_t* obj) {
     return false;
 
   elfu_section_t sym;
-  if (symtab_fetch(obj, &sym) && nm_process_symtab(obj, &sym, &symbols, &ret) < 0)
+  if (nm_get_symtab_fn(obj, &sym) && nm_process_symtab(obj, &sym, &symbols, &ret) < 0)
     goto err;
 
   if (!flag_no_sort)
@@ -311,7 +311,7 @@ done:
 #define NM_DEFAULT_PROGRAM "a.out"
 
 int main(int argc, char** argv) {
-  opt_t opt = nm_opt("prugDa");
+  opt_t opt = nm_opt("prugDah");
 
   int flag;
   while ((flag = opt_next(&opt, argc, argv)) != OPT_END) {
@@ -321,7 +321,7 @@ int main(int argc, char** argv) {
         break;
       case 'D':
         flag_dynamic = true;
-        symtab_fetch = elfu_get_dynsymtab;
+        nm_get_symtab_fn = elfu_get_dynsymtab;
         break;
       case 'g':
         flag_only_external = true;
@@ -335,9 +335,10 @@ int main(int argc, char** argv) {
       case 'p':
         flag_no_sort = true;
         break;
+      case 'h':
       default:
-        // TODO: print usage
-        break;
+        nm_putstr(NM_COMMAND_USAGE);
+        return (flag == 'h') ? EXIT_SUCCESS : EXIT_FAILURE;
     }
   }
 

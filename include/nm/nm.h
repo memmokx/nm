@@ -61,8 +61,8 @@ typedef struct {
   nm_sym_type_t type;
   uint64_t value;
 
-  elfu_isym_t o;  // The original symbol
-  size_t pos;     // The symbol position in the table
+  elfu_isym_t internal;  // The original symbol
+  size_t pos;            // The symbol position in the table
 } nm_symbol_t;
 
 typedef int (*cmp_fn)(const nm_symbol_t*, const nm_symbol_t*);
@@ -78,5 +78,17 @@ bool nm_symbol_vector_new(nm_symbol_vector_t* vec);
 void nm_symbol_vector_destroy(nm_symbol_vector_t* vec);
 bool nm_symbol_vector_grow(nm_symbol_vector_t* vec, size_t min);
 bool nm_symbol_vector_push(nm_symbol_vector_t* vec, nm_symbol_t sym);
+
+#define NM_COMMAND_USAGE                                                  \
+  "Usage: ft_nm [option(s)] [file(s)]\n"                                  \
+  " List symbols in [file(s)] (a.out by default).\n"                      \
+  " The options are:\n"                                                   \
+  "  -a              Display all symbols (no filter)\n"                   \
+  "  -D              Display dynamic symbols instead of normal symbols\n" \
+  "  -g              Display only external symbols\n"                     \
+  "  -p              Do not sort the symbols\n"                           \
+  "  -r              Reverse the sort order of the symbols\n"             \
+  "  -u              Display only undefined symbols\n"                    \
+  "  -h              Display this help message\n"
 
 #endif
