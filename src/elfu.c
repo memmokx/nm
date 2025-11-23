@@ -16,8 +16,6 @@ static thread_local elfu_err_t g_err = ELFU_SUCCESS;
     g_err = (e);  \
   } while (0)
 
-static constexpr u8 elf_magic[] = {0x7f, 'E', 'L', 'F'};
-
 #define translate(e, v)                        \
   ((e)->endian == (e)->hendian ? (v)           \
                                : _Generic((v), \
@@ -147,8 +145,7 @@ static Elf64_Vernaux _elfu_read_vernaux(const elfu_t* e, const uintptr_t offset)
   return raw;
 }
 
-static __attribute_maybe_unused__ Elf64_Verdef _elfu_read_verdef(const elfu_t* e,
-                                                                 const uintptr_t offset) {
+static Elf64_Verdef _elfu_read_verdef(const elfu_t* e, const uintptr_t offset) {
   Elf64_Verdef raw = *(Elf64_Verdef*)(e->raw + offset);
 
   raw.vd_version = translate(e, raw.vd_version);
@@ -161,8 +158,7 @@ static __attribute_maybe_unused__ Elf64_Verdef _elfu_read_verdef(const elfu_t* e
   return raw;
 }
 
-static __attribute_maybe_unused__ Elf64_Verdaux _elfu_read_verdaux(const elfu_t* e,
-                                                                   const uintptr_t offset) {
+static Elf64_Verdaux _elfu_read_verdaux(const elfu_t* e, const uintptr_t offset) {
   Elf64_Verdaux raw = *(Elf64_Verdaux*)(e->raw + offset);
 
   raw.vda_name = translate(e, raw.vda_name);
@@ -183,6 +179,8 @@ static elfu_endian_t fetch_host_endian() {
 }
 
 static bool elf_read_ident(elfu_t* e) {
+  constexpr u8 elf_magic[] = {0x7f, 'E', 'L', 'F'};
+
   if (e->fsize < sizeof(elf_ident_t)) {
     seterr(ELFU_UNKNOWN_FORMAT);
     return false;
@@ -197,7 +195,7 @@ static bool elf_read_ident(elfu_t* e) {
   e->class = id->class;
   e->endian = id->data;
 
-  if ((e->class != CLASS32 && e->class != CLASS64) ||
+  if (id->version != EV_CURRENT || (e->class != CLASS32 && e->class != CLASS64) ||
       (e->endian != ENDIAN_LITTLE && e->endian != ENDIAN_BIG)) {
     seterr(ELFU_UNKNOWN_FORMAT);
     return false;
@@ -351,7 +349,6 @@ static const char* _elfu_version_from_verdef(const elfu_section_t* verdef,
 
 static const char* _elfu_version_from_verneed(const elfu_section_t* verneed,
                                               const size_t version) {
-  // TODO: this feels repetitive ...
   const auto e = verneed->elf;
   const auto base = (uintptr_t)verneed->hdr.sh_offset;
   const auto end = base + verneed->hdr.sh_size;
