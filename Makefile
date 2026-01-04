@@ -1,11 +1,11 @@
-NAME = ft_nm 
+NAME = ft_nm
 CC ?= cc
 
 CFLAGS = -std=c23 -Wall -Wextra -Werror -Wno-unknown-warning-option -Wno-error=old-style-declaration
+LIBAD = libadvanced/libad.a
+INCLUDE = -Iinclude -Ilibadvanced/include
 
-INCLUDE = -Iinclude 
-
-MAIN_SRC = src/main.c src/elfu.c src/common.c src/sort.c src/vec.c src/opt.c
+MAIN_SRC = src/main.c src/elfu.c src/sort.c src/opt.c
 
 SRC = $(MAIN_SRC)
 OBJ = $(SRC:.c=.o)
@@ -35,24 +35,28 @@ endif
 
 all: $(NAME)
 
-$(NAME): $(OBJ)
-	$(CC) $(CFLAGS) $(OBJ) -o $@ $(INCLUDE)
+$(NAME): $(OBJ) $(LIBAD)
+	$(CC) $(CFLAGS) $^ -o $@ $(INCLUDE)
 	@echo "$(COLOUR_GREEN)Compiled:$(COLOUR_END) $(BOLD)$@$(COLOUR_END)"
 
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@ $(INCLUDE)
 	@echo "$(COLOUR_BLUE)Compiled:$(COLOUR_END) $< $(COLOUR_GRAY)$(CC) $(CFLAGS)$(COLOUR_END)"
 
+$(LIBAD):
+	@$(MAKE) -C libadvanced
+
 format:
 	clang-format -i $(SRC) $(TEST_SRC)
 
 clean:
 	@rm -f $(OBJ)
+	@$(MAKE) -C libadvanced clean
 
 fclean: clean
 	@rm -f $(NAME)
+	@$(MAKE) -C libadvanced fclean
 
 re : fclean all
 
-
-.PHONY: re all fclean clean format 
+.PHONY: re all fclean clean format

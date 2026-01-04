@@ -68,17 +68,6 @@ typedef struct {
 typedef int (*cmp_fn)(const nm_symbol_t*, const nm_symbol_t*);
 void heapsort(nm_symbol_t* arr, size_t n, cmp_fn cmp);
 
-typedef struct {
-  nm_symbol_t* ptr;
-  size_t len;
-  size_t cap;
-} nm_symbol_vector_t;
-
-bool nm_symbol_vector_new(nm_symbol_vector_t* vec);
-void nm_symbol_vector_destroy(nm_symbol_vector_t* vec);
-bool nm_symbol_vector_grow(nm_symbol_vector_t* vec, size_t min);
-bool nm_symbol_vector_push(nm_symbol_vector_t* vec, nm_symbol_t sym);
-
 #define NM_COMMAND_USAGE                                                  \
   "Usage: ft_nm [option(s)] [file(s)]\n"                                  \
   " List symbols in [file(s)] (a.out by default).\n"                      \

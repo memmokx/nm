@@ -3,13 +3,16 @@
 #include <stdio.h>
 #include <unistd.h>
 
-#include <nm/common.h>
 #include <nm/elfu.h>
 #include <nm/nm.h>
 #include <stdlib.h>
 #include <string.h>
 
+#include <ad/ad.h>
 #include <nm/opt.h>
+#include "ad/collections.h"
+#include "ad/io.h"
+#include "ad/string.h"
 
 static const char* g_filename = nullptr;
 
@@ -26,22 +29,22 @@ static auto nm_get_symtab_fn = elfu_get_symtab;
 
 #define nm_err(err)                          \
   do {                                       \
-    nm_putstr_fd(STDERR_FILENO, "nm: ");     \
-    nm_putstr_fd(STDERR_FILENO, g_filename); \
-    nm_putstr_fd(STDERR_FILENO, ": ");       \
-    nm_putstr_fd(STDERR_FILENO, (err));      \
-    nm_putstr_fd(STDERR_FILENO, "\n");       \
+    ad_dputs(STDERR_FILENO, "nm: ");     \
+    ad_dputs(STDERR_FILENO, g_filename); \
+    ad_dputs(STDERR_FILENO, ": ");       \
+    ad_dputs(STDERR_FILENO, (err));      \
+    ad_dputs(STDERR_FILENO, "\n");       \
   } while (false)
 
 #define nm_warn_p(err, prefix)               \
   do {                                       \
-    nm_putstr_fd(STDERR_FILENO, "nm: ");     \
-    nm_putstr_fd(STDERR_FILENO, (prefix));   \
-    nm_putstr_fd(STDERR_FILENO, "'");        \
-    nm_putstr_fd(STDERR_FILENO, g_filename); \
-    nm_putstr_fd(STDERR_FILENO, "' ");       \
-    nm_putstr_fd(STDERR_FILENO, (err));      \
-    nm_putstr_fd(STDERR_FILENO, "\n");       \
+    ad_dputs(STDERR_FILENO, "nm: ");     \
+    ad_dputs(STDERR_FILENO, (prefix));   \
+    ad_dputs(STDERR_FILENO, "'");        \
+    ad_dputs(STDERR_FILENO, g_filename); \
+    ad_dputs(STDERR_FILENO, "' ");       \
+    ad_dputs(STDERR_FILENO, (err));      \
+    ad_dputs(STDERR_FILENO, "\n");       \
   } while (false)
 
 #define nm_warn(err) nm_warn_p(err, "")
@@ -81,7 +84,7 @@ static nm_sym_type_t nm_section_type(const elfu_t* obj, const size_t index) {
     return SYM_INITD_L;
   if (data && ro)
     return SYM_RD_ONLY_DATA_L;
-  if (section_name && nm_strncmp(section_name, ".debug", 6) == 0)
+  if (section_name && ad_strncmp(section_name, ".debug", 6) == 0)
     return SYM_DEBUG;
   if (!code && !data && ro)
     return SYM_RD_ONLY;
@@ -142,8 +145,9 @@ static bool nm_keep_symbol(const elfu_t* obj, const Elf64_Sym s) {
  */
 static ssize_t nm_process_symtab(const elfu_t* obj,
                                  const elfu_section_t* symtab,
-                                 nm_symbol_vector_t* symbols,
+                                 vector(nm_symbol_t) * symbols,
                                  bool* has_symbols) {
+  vector(nm_symbol_t) symvec = *symbols;
   elfu_sym_iter_t iter;
   if (!elfu_get_sym_iter(obj, symtab, &iter))
     return -1;
@@ -173,10 +177,11 @@ static ssize_t nm_process_symtab(const elfu_t* obj,
         .pos = iter.cursor,
     };
 
-    if (!nm_symbol_vector_push(symbols, symbol))
+    if (!vector_push(symvec, symbol))
       return -1;
   }
 
+  *symbols = symvec;
   *has_symbols = (iter.total > 1);
 
   return (ssize_t)iter.total;
@@ -203,24 +208,24 @@ static void nm_symbol_put_value(const nm_symbol_t* s, const bool bits_64) {
       buffer[i] = ' ';
   }
 
-  nm_putstr(buffer);
+  ad_puts(buffer);
 }
 
 static void nm_display_symbol(const nm_symbol_t* s, const bool bits_64) {
   nm_symbol_put_value(s, bits_64);
-  nm_putstr((char[]){' ', (char)s->type, ' ', 0});
-  nm_putstr(s->name);
+  ad_puts((char[]){' ', (char)s->type, ' ', 0});
+  ad_puts(s->name);
   if (s->version) {
-    nm_putstr("@");
+    ad_puts("@");
     if (!s->version_hidden)
-      nm_putstr("@");
-    nm_putstr(s->version);
+      ad_puts("@");
+    ad_puts(s->version);
   }
-  nm_putstr("\n");
+  ad_puts("\n");
 }
 
 static int nm_cmp_symbol(const nm_symbol_t* a, const nm_symbol_t* b) {
-  auto cmp = nm_strcmp(a->name, b->name);
+  auto cmp = ad_strcmp(a->name, b->name);
   if (cmp == 0)
     cmp = (int)a->pos - (int)b->pos;
   return flag_reverse_sort ? -cmp : cmp;
@@ -228,23 +233,21 @@ static int nm_cmp_symbol(const nm_symbol_t* a, const nm_symbol_t* b) {
 
 static bool nm_list_symbols(const elfu_t* obj) {
   bool ret = false;
-  nm_symbol_vector_t symbols = {};
-  if (!nm_symbol_vector_new(&symbols))
-    return false;
+  vector(nm_symbol_t) symbols = nullptr;
 
   elfu_section_t sym;
   if (nm_get_symtab_fn(obj, &sym) && nm_process_symtab(obj, &sym, &symbols, &ret) < 0)
     goto err;
 
   if (!flag_no_sort)
-    heapsort(symbols.ptr, symbols.len, nm_cmp_symbol);
+    heapsort(symbols, vector_len(symbols), nm_cmp_symbol);
 
   const bool bits_64 = obj->class == CLASS64;
-  for (size_t i = 0; i < symbols.len; i++)
-    nm_display_symbol(&symbols.ptr[i], bits_64);
+  for (size_t i = 0; i < vector_len(symbols); i++)
+    nm_display_symbol(&symbols[i], bits_64);
 
 err:
-  nm_symbol_vector_destroy(&symbols);
+  vector_destroy(symbols);
   return ret;
 }
 
@@ -288,9 +291,9 @@ static int nm_process_file(const char* name, bool print_filename) {
   }
 
   if (print_filename) {
-    nm_putstr("\n");
-    nm_putstr(name);
-    nm_putstr(":\n");
+    ad_puts("\n");
+    ad_puts(name);
+    ad_puts(":\n");
   }
 
   if (!nm_list_symbols(obj))
@@ -337,7 +340,7 @@ int main(int argc, char** argv) {
         break;
       case 'h':
       default:
-        nm_putstr(NM_COMMAND_USAGE);
+        ad_puts(NM_COMMAND_USAGE);
         return (flag == 'h') ? EXIT_SUCCESS : EXIT_FAILURE;
     }
   }
