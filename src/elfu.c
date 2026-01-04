@@ -473,7 +473,7 @@ bool elfu_sym_iter_next(elfu_sym_iter_t* i, elfu_sym_t* sym) {
   const char* version = nullptr;
   const auto raw = _elfu_read_sym(e, off);
 
-  if (ELF64_ST_TYPE(raw.st_info) == STT_SECTION &&
+  if (ELF64_ST_TYPE(raw.st_info) == STT_SECTION && raw.st_shndx < SHN_LORESERVE &&
       (name = elfu_get_section_name(e, raw.st_shndx)) == nullptr)
     name = "<corrupt>";
   if (!name && (name = elfu_strptr(e, symtab->hdr.sh_link, raw.st_name)) == nullptr)
@@ -651,6 +651,10 @@ void elfu_destroy(elfu_t** e) {
     munmap((*e)->raw, (*e)->fsize);
   free(*e);
   *e = nullptr;
+}
+
+void elfu_reset_err() {
+  g_err = ELFU_SUCCESS;
 }
 
 bool elfu_has_err() {

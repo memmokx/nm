@@ -27,8 +27,8 @@ static auto nm_get_symtab_fn = elfu_get_symtab;
 
 // too lazy to pull libft ...
 
-#define nm_err(err)                          \
-  do {                                       \
+#define nm_err(err)                      \
+  do {                                   \
     ad_dputs(STDERR_FILENO, "nm: ");     \
     ad_dputs(STDERR_FILENO, g_filename); \
     ad_dputs(STDERR_FILENO, ": ");       \
@@ -36,8 +36,8 @@ static auto nm_get_symtab_fn = elfu_get_symtab;
     ad_dputs(STDERR_FILENO, "\n");       \
   } while (false)
 
-#define nm_warn_p(err, prefix)               \
-  do {                                       \
+#define nm_warn_p(err, prefix)           \
+  do {                                   \
     ad_dputs(STDERR_FILENO, "nm: ");     \
     ad_dputs(STDERR_FILENO, (prefix));   \
     ad_dputs(STDERR_FILENO, "'");        \
@@ -124,17 +124,14 @@ static bool nm_keep_symbol(const elfu_t* obj, const Elf64_Sym s) {
 
   const auto type = ELF64_ST_TYPE(s.st_info);
   const auto bind = ELF64_ST_BIND(s.st_info);
+
+  if (!flag_no_filter && (type == STT_FILE || type == STT_SECTION))
+    return false;
+
   if (flag_only_undefined)
     return (s.st_shndx == SHN_UNDEF);
   if (flag_only_external)
     return (bind == STB_GLOBAL || bind == STB_WEAK || bind == STB_GNU_UNIQUE);
-  if (flag_no_filter)
-    return true;
-
-  // I'm pretty sure those are only used for debugging ? And nm filters debugging symbols
-  // by default.
-  if (type == STT_FILE || type == STT_SECTION)
-    return false;
 
   return true;
 }
@@ -304,6 +301,7 @@ static int nm_process_file(const char* name, bool print_filename) {
 err:
   exit_code = EXIT_FAILURE;
 done:
+  elfu_reset_err();
   if (fd != -1)
     close(fd);
   if (obj)
@@ -355,9 +353,8 @@ int main(int argc, char** argv) {
 
   int exit_code = EXIT_SUCCESS;
   if (argc > 1) {
-    for (int i = 0; i < argc; i++) {
+    for (int i = 0; i < argc; i++)
       exit_code += nm_process_file(argv[i], true);
-    }
   }
 
   return exit_code;

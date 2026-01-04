@@ -240,6 +240,11 @@ bool elfu_has_err();
 elfu_err_t elfu_get_err();
 
 /*!
+ * Reset the error state.
+ */
+void elfu_reset_err();
+
+/*!
  * Destroy an \c elfu_t object and unmap the object from memory.
  * @param e A pointer to an \c elfu_t object pointer to destroy. Set to \c nullptr after destruction.
  */

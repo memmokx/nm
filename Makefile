@@ -44,7 +44,7 @@ $(NAME): $(OBJ) $(LIBAD)
 	@echo "$(COLOUR_BLUE)Compiled:$(COLOUR_END) $< $(COLOUR_GRAY)$(CC) $(CFLAGS)$(COLOUR_END)"
 
 $(LIBAD):
-	@$(MAKE) -C libadvanced
+	@$(MAKE) -C libadvanced -j
 
 format:
 	clang-format -i $(SRC) $(TEST_SRC)
