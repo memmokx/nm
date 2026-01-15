@@ -224,7 +224,7 @@ static void nm_display_symbol(const nm_symbol_t* s, const bool bits_64) {
 static int nm_cmp_symbol(const nm_symbol_t* a, const nm_symbol_t* b) {
   auto cmp = ad_strcmp(a->name, b->name);
   if (cmp == 0)
-    cmp = (int)a->pos - (int)b->pos;
+    cmp = !flag_reverse_sort ? (int)a->pos - (int)b->pos : (int)b->pos - (int)a->pos;
   return flag_reverse_sort ? -cmp : cmp;
 }
 
@@ -316,6 +316,7 @@ int main(int argc, char** argv) {
 
   int flag;
   while ((flag = opt_next(&opt, argc, argv)) != OPT_END) {
+    ad_dputs(STDERR_FILENO, (char[]){flag, '\n', 0});
     switch (flag) {
       case 'a':
         flag_no_filter = true;

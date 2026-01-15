@@ -30,7 +30,7 @@ int opt_next(opt_t* o, int argc, char** argv) {
   const auto opt = arg[o->argp++];
   if (!arg[o->argp]) {
     o->argc++;
-    o->argp = -1;
+    o->argp = 0;
   }
 
   if (!o->lut[(unsigned char)opt])
