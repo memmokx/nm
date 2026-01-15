@@ -15,7 +15,7 @@ static void swap(nm_symbol_t* arr, const size_t a, const size_t b) {
   arr[b] = tmp;
 }
 
-void heapsort(nm_symbol_t* arr, const size_t n, const cmp_fn cmp) {
+void nm_heapsort(nm_symbol_t* arr, const size_t n, const cmp_fn cmp) {
   auto start = n / 2;
   auto end = n;
 

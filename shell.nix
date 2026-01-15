@@ -1,16 +1,18 @@
 {
   pkgs ? import <nixpkgs> { },
 }:
-pkgs.mkShell.override { stdenv = pkgs.llvmPackages_21.stdenv; } {
+
+with pkgs;
+let
+  llvm = llvmPackages_21;
+  darwinPackages = lib.optionals stdenv.isDarwin [
+    elf-header-real
+  ];
+in
+mkShell.override { stdenv = llvm.stdenv; } {
   packages = [
-    pkgs.llvmPackages_21.libcxx
-    pkgs.clang-tools
-    pkgs.bear
-  ];
-  buildInputs = [
-    (pkgs.writeScriptBin "bmake" ''
-      #!${pkgs.stdenv.shell}
-      exec ${pkgs.bear}/bin/bear -- make "$@"
-    '')
-  ];
+    bear
+    clang-tools
+  ]
+  ++ darwinPackages;
 }

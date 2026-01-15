@@ -237,7 +237,7 @@ static bool nm_list_symbols(const elfu_t* obj) {
     goto err;
 
   if (!flag_no_sort)
-    heapsort(symbols, vector_len(symbols), nm_cmp_symbol);
+    nm_heapsort(symbols, vector_len(symbols), nm_cmp_symbol);
 
   const bool bits_64 = obj->class == CLASS64;
   for (size_t i = 0; i < vector_len(symbols); i++)
@@ -316,7 +316,6 @@ int main(int argc, char** argv) {
 
   int flag;
   while ((flag = opt_next(&opt, argc, argv)) != OPT_END) {
-    ad_dputs(STDERR_FILENO, (char[]){flag, '\n', 0});
     switch (flag) {
       case 'a':
         flag_no_filter = true;
@@ -344,8 +343,8 @@ int main(int argc, char** argv) {
     }
   }
 
-  argc -= opt.argc;
-  argv += opt.argc;
+  argc = opt.args;
+  argv += 1;
 
   if (argc == 0)
     return nm_process_file(NM_DEFAULT_PROGRAM, false);
@@ -353,10 +352,8 @@ int main(int argc, char** argv) {
     return nm_process_file(argv[0], false);
 
   int exit_code = EXIT_SUCCESS;
-  if (argc > 1) {
-    for (int i = 0; i < argc; i++)
-      exit_code += nm_process_file(argv[i], true);
-  }
+  for (int i = 0; i < argc; i++)
+    exit_code += nm_process_file(argv[i], true);
 
   return exit_code;
 }

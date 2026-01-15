@@ -66,7 +66,7 @@ typedef struct {
 } nm_symbol_t;
 
 typedef int (*cmp_fn)(const nm_symbol_t*, const nm_symbol_t*);
-void heapsort(nm_symbol_t* arr, size_t n, cmp_fn cmp);
+void nm_heapsort(nm_symbol_t* arr, size_t n, cmp_fn cmp);
 
 #define NM_COMMAND_USAGE                                                  \
   "Usage: ft_nm [option(s)] [file(s)]\n"                                  \

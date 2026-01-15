@@ -13,30 +13,53 @@ opt_t nm_opt(const char* flags) {
 int opt_next(opt_t* o, int argc, char** argv) {
   if (o->argc == 0)
     o->argc = 1;
-  if (o->argc == argc)
-    goto end;
 
-  const auto arg = argv[o->argc];
-  if (arg[0] != '-' || !arg[1])
-    goto end;
-  // -- end of flags
-  if (arg[1] == '-' && !arg[2]) {
-    o->argc++;
-    goto end;
-  }
+  while (o->argc < argc) {
+    const auto arg = argv[o->argc];
 
-  if (o->argp == 0)
+    if (o->argp != 0) {
+      const auto opt = arg[o->argp++];
+      if (!arg[o->argp]) {
+        o->argc++;
+        o->argp = 0;
+      }
+
+      if (!o->lut[(unsigned char)opt])
+        return OPT_UNKNOWN;
+
+      return opt;
+    }
+
+    // -- means end of flags
+    if (arg[0] == '-' && arg[1] == '-' && !arg[2]) {
+      o->argc++;
+      o->flagend = true;
+      continue;
+    }
+
+    // no more flags to process OR the value doesnt look like a flag
+    if (o->flagend || arg[0] != '-' || !arg[1]) {
+      // shift file
+      for (int i = o->argc; i > o->args; i--)
+        argv[i] = argv[i - 1];
+
+      argv[o->args++] = arg;
+      o->argc++;
+      continue;
+    }
+
     o->argp = 1;
-  const auto opt = arg[o->argp++];
-  if (!arg[o->argp]) {
-    o->argc++;
-    o->argp = 0;
+    const auto opt = arg[o->argp++];
+    if (!arg[o->argp]) {
+      o->argc++;
+      o->argp = 0;
+    }
+
+    if (!o->lut[(unsigned char)opt])
+      return OPT_UNKNOWN;
+
+    return opt;
   }
 
-  if (!o->lut[(unsigned char)opt])
-    return OPT_UNKNOWN;
-  return opt;
-
-end:
   return OPT_END;
 }

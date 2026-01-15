@@ -10,3 +10,4 @@ ft_ssl
 compile_commands.json
 tests/
 .cache/
+.direnv/

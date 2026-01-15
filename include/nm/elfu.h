@@ -3,6 +3,7 @@
 
 #include <elf.h>
 #include <stddef.h>
+#include <stdint.h>
 
 // ELF reader inspired by libelf
 // Handle different endian & bit sizes. It is incomplete as its only goal is to

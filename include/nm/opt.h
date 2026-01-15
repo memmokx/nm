@@ -10,9 +10,12 @@ typedef struct {
   bool lut[UINT8_MAX];
   int argc;
   int argp;
+  int args;
+  bool flagend;
 } opt_t;
 
 opt_t nm_opt(const char* flags);
 int opt_next(opt_t* o, int argc, char** argv);
+int opt_arg(opt_t* o, int argc, char** argv);
 
 #endif
