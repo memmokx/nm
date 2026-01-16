@@ -314,6 +314,9 @@ done:
 int main(int argc, char** argv) {
   opt_t opt = nm_opt("prugDah");
 
+  argv++;
+  argc--;
+
   int flag;
   while ((flag = opt_next(&opt, argc, argv)) != OPT_END) {
     switch (flag) {
@@ -344,7 +347,6 @@ int main(int argc, char** argv) {
   }
 
   argc = opt.args;
-  argv += 1;
 
   if (argc == 0)
     return nm_process_file(NM_DEFAULT_PROGRAM, false);

@@ -11,9 +11,6 @@ opt_t nm_opt(const char* flags) {
 }
 
 int opt_next(opt_t* o, int argc, char** argv) {
-  if (o->argc == 0)
-    o->argc = 1;
-
   while (o->argc < argc) {
     const auto arg = argv[o->argc];
 
